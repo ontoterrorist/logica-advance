@@ -686,7 +686,7 @@ root.SPRITE = { N: 24, BASE, PAL, SPARK, BEAK_OPEN, patches, eyePatch, grid };
 
 let ac = null, master = null, bus = null, sfxBus = null, noise = null, timer = null;
 const waves = {};
-const opt = { sfx: true, music: true, mv: 0.22, sv: 1 };   // mv y sv: ganancia de música y de efectos
+const opt = { sfx: true, music: true, mv: 0.15, sv: 1 };   // mv y sv: ganancia de música y de efectos
 let want = null;   // canción pedida
 let cur = null;    // canción sonando
 
@@ -2427,7 +2427,7 @@ const totalStars = () => C.worlds.reduce((n, W, i) => n + wstat(i).stars, 0);
 
 /* ---------- sonido ---------- */
 const AU = window.LAudio, sfx = AU.sfx;
-const MVOL = [0, 0.07, 0.13, 0.22, 0.34, 0.5], SVOL = [0, 0.3, 0.55, 0.8, 1, 1.25];
+const MVOL = [0, 0.05, 0.09, 0.15, 0.24, 0.36], SVOL = [0, 0.3, 0.55, 0.8, 1, 1.25];
 const applySound = () => AU.set({ sfx: save.sv > 0, music: save.mv > 0, mv: MVOL[save.mv], sv: SVOL[save.sv] });
 applySound();
 /* cada sección tiene su tema: portada, mapa, un tema por mundo (tranquilo en la teoría) y el de los jefes */
@@ -4131,7 +4131,7 @@ const totalStars = () => C.worlds.reduce((n, W, i) => n + wstat(i).stars, 0);
 
 /* ---------- sonido ---------- */
 const AU = window.LAudio, sfx = AU.sfx;
-const MVOL = [0, 0.07, 0.13, 0.22, 0.34, 0.5], SVOL = [0, 0.3, 0.55, 0.8, 1, 1.25];
+const MVOL = [0, 0.05, 0.09, 0.15, 0.24, 0.36], SVOL = [0, 0.3, 0.55, 0.8, 1, 1.25];
 const applySound = () => AU.set({ sfx: save.sv > 0, music: save.mv > 0, mv: MVOL[save.mv], sv: SVOL[save.sv] });
 applySound();
 /* cada sección tiene su tema: portada, mapa, un tema por mundo (tranquilo en la teoría) y el de los jefes */
