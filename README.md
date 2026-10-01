@@ -2,6 +2,8 @@
 
 Juego para aprender lógica formal con deducción natural al estilo Fitch, con aspecto de consola portátil.
 
+**Jugar:** https://ontoterrorist.github.io/logica-advance/ · English version: https://ontoterrorist.github.io/logic-advance/
+
 Siete mundos, cada uno con teoría y retos:
 
 | Mundo | Tema |

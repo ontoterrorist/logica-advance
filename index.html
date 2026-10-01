@@ -600,6 +600,7 @@ kbd { font-family: var(--fb); font-size: 1em; padding: 0 6px; background: var(--
   </aside>
 </div>
 <script>
+window.LA_LANG = 'es';
 /* Lógica Advance — núcleo lógico: fórmulas, pruebas de Fitch y reglas */
 (function (root) {
 'use strict';
@@ -2387,7 +2388,9 @@ const owl = (px, mood) => {
   const m = MOODS[mood] ? mood : 'neutral';
   return `<svg class="owl m-${m}" width="${24 * px}" height="${24 * px}" viewBox="0 0 24 24" shape-rendering="crispEdges" role="img" aria-label="Minerva, la lechuza, ${MOODS[m]}">${owlBody(m)}</svg>`;
 };
-const moodOf = text => (/¡/.test(text) ? 'happy' : /\?/.test(text) ? 'think' : 'neutral');
+const EN = window.LA_LANG === 'en';
+/* el ánimo de Minerva sale del propio texto: una exclamación la alegra, una pregunta la pone a pensar */
+const moodOf = text => ((EN ? /!/ : /¡/).test(text) ? 'happy' : /\?/.test(text) ? 'think' : 'neutral');
 
 /* ---------- partida guardada ---------- */
 const KEY = 'logica-advance-v1';
@@ -2815,7 +2818,7 @@ function playSolution() {
 }
 
 /* ----- modelos ----- */
-const VNAME = { 1: 'V', 0.5: 'A', 0: 'F' };
+const VNAME = EN ? { 1: 'T', 0.5: 'B', 0: 'F' } : { 1: 'V', 0.5: 'A', 0: 'F' };   // en inglés: true, both, false
 function scrModel() {
   const s = ST.stage, lp = s.logic === 'LP';
   const des = v => (lp ? v >= 0.5 : v === 1);
@@ -3278,7 +3281,6 @@ render();
 
 </script>
 <script>
-/* guarda la app en el teléfono para que abra sin internet */
 if ('serviceWorker' in navigator) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
 </script>
 </body>
