@@ -207,6 +207,9 @@ b, strong { word-spacing: .14em; }
 .vmeter i:nth-child(1) { height: 10px; } .vmeter i:nth-child(2) { height: 15px; } .vmeter i:nth-child(3) { height: 20px; } .vmeter i:nth-child(4) { height: 25px; } .vmeter i:nth-child(5) { height: 30px; }
 .vmeter i.on { background: var(--hi); }
 .title { position: relative; }
+.lng { gap: 0; padding: .3em .35em; }
+.lng b { font-family: var(--fd); font-size: 10px; padding: 5px 6px 4px; color: var(--ink2); }
+.lng b.on { background: var(--ink); color: var(--panel); }
 .tsnd { position: absolute; top: 0; right: 0; display: flex; }
 .winowl { margin-bottom: -4px; }
 @keyframes bob { 50% { transform: translateY(-3px); } }
@@ -600,6 +603,309 @@ kbd { font-family: var(--fb); font-size: 1em; padding: 0 6px; background: var(--
   </aside>
 </div>
 <script>
+/* Lógica Advance — Minerva, la lechuza (24×24) y sus expresiones */
+(function (root) {
+'use strict';
+
+const BASE = [
+  '........................',
+  '.....CCCCCCCCCCCCCC.....',
+  '....CCCCCCCCCCCCCCCC....',
+  '..K....cccccccccc.T..K..',
+  '.KBK...CCCCCCCCCC.T.KBK.',
+  '.KBBKKKKKKKKKKKKKKTKBBK.',
+  '.KBBBBBBBBBBBBBBBTTTBBK.',
+  '.KBBBWWWWBBDDBBWWWWBBBK.',
+  '.KBBWWWWWWBDDBWWWWWWBBK.',
+  '.KBBWWHPWWBDDBWWHPWWBBK.',
+  '.KBBWWPPWWBYYBWWPPWWBBK.',
+  '.KBBWWWWWWBYYBWWWWWWBBK.',
+  '.KBBBWWWWBBOOBBWWWWBBBK.',
+  '.KBBBBBBBBBBBBBBBBBBBBK.',
+  '..KBBBBBBBBBBBBBBBBBBK..',
+  '..KDBBLLLLLLLLLLLLBBDK..',
+  '.KDDBLLLMLLLLLLMLLLBDDK.',
+  '.KDDBLLLLLLMMLLLLLLBDDK.',
+  '.KDDBLLLMLLLLLLMLLLBDDK.',
+  '.KDDBLLLLLLMMLLLLLLBDDK.',
+  '..KDBBLLLLLLLLLLLLBBDK..',
+  '...KKBBBBBBBBBBBBBBKK...',
+  '....KYYYYK....KYYYYK....',
+  '....KKKKKK....KKKKKK....'
+];
+const PAL = {
+  K: '#2b2148', B: '#b0703f', D: '#844d2a', L: '#ffe2ac', M: '#e9bd7a', W: '#ffffff', P: '#1d1438', H: '#ffffff',
+  Y: '#ffb52e', O: '#e8862a', C: '#4347a0', c: '#2f327a', T: '#ffcf2e', R: '#ff8fa0', S: '#7cc7ff'
+};
+/* ojos: 6×6 desde la fila 7; el izquierdo en la columna 4 y el derecho, reflejado, en la 14 */
+const EYE = {
+  blink: ['BBBBBB', 'BBBBBB', 'BBBBBB', 'KKKKKK', 'BBBBBB', 'BBBBBB'],
+  happy: ['BBBBBB', 'BBKKBB', 'BKBBKB', 'KBBBBK', 'BBBBBB', 'BBBBBB'],
+  sad: ['BBBBKK', 'BBKKWW', 'KKWWWW', 'WWHPWW', 'WWPPWW', 'BWWWWB'],
+  think: ['BWWWWB', 'WWWHPW', 'WWWPPW', 'WWWWWW', 'WWWWWW', 'BWWWWB'],
+  brave: ['BKKBBB', 'WWWKKB', 'WWWWWK', 'WWHPWW', 'WWPPWW', 'BWWWWB']
+};
+const SAME_SIDE = { think: true };
+/* detalles fijos de cada expresión: [x, y, píxeles] */
+const EXTRA = {
+  happy: [[3, 11, 'RR'], [3, 12, 'RR'], [19, 11, 'RR'], [19, 12, 'RR'], [11, 11, 'PP']],
+  sad: [[20, 7, 'S'], [20, 8, 'SS'], [20, 9, 'SS']],
+  think: [[22, 0, 'T'], [21, 1, 'TTT'], [21, 2, 'TTT'], [22, 3, 'c']]
+};
+const SPARK = [[1, 0, 'T'], [0, 1, 'TTT'], [1, 2, 'T'], [22, 0, 'T'], [21, 1, 'TTT'], [22, 2, 'T']];
+const BEAK_OPEN = [[11, 11, 'PP']];
+
+const mirror = s => s.split('').reverse().join('').replace(/PH/g, 'HP');
+function eyePatch(name) {
+  const rows = EYE[name], out = [];
+  rows.forEach((r, i) => {
+    out.push([4, 7 + i, r]);
+    out.push([14, 7 + i, SAME_SIDE[name] ? r : mirror(r)]);
+  });
+  return out;
+}
+/* parches que convierten la base en la expresión pedida */
+function patches(mood) {
+  let p = [];
+  if (EYE[mood]) p = p.concat(eyePatch(mood));
+  if (EXTRA[mood]) p = p.concat(EXTRA[mood]);
+  return p;
+}
+function grid(mood) {
+  const g = BASE.map(r => r.split(''));
+  patches(mood).forEach(([x, y, s]) => { for (let i = 0; i < s.length; i++) g[y][x + i] = s[i]; });
+  return g;
+}
+
+root.SPRITE = { N: 24, BASE, PAL, SPARK, BEAK_OPEN, patches, eyePatch, grid };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Lógica Advance — sonido: efectos, voz del texto y música por secciones (sintetizada, estilo GBA) */
+(function (root) {
+'use strict';
+
+let ac = null, master = null, bus = null, sfxBus = null, noise = null, timer = null;
+const waves = {};
+const opt = { sfx: true, music: true, mv: 0.22, sv: 1 };   // mv y sv: ganancia de música y de efectos
+let want = null;   // canción pedida
+let cur = null;    // canción sonando
+
+const SEMI = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
+const QUAL = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], M7: [0, 4, 7, 11], m7: [0, 3, 7, 10], 6: [0, 4, 7, 9] };
+const hzOf = (semi, oct) => 440 * Math.pow(2, (semi + (oct - 4) * 12 - 9) / 12);
+function noteHz(n) { const m = /^([A-G][#b]?)(\d)$/.exec(n); return hzOf(SEMI[m[1]], +m[2]); }
+function chord(sym) { const m = /^([A-G][#b]?)(.*)$/.exec(sym); return { root: SEMI[m[1]], iv: QUAL[m[2]] }; }
+
+/* Cada compás: [acorde, melodía en ocho corcheas]. «-» silencio, «_» alarga la nota anterior.
+   arp: índices de las notas del acorde · bass: r raíz, f quinta, o octava · drums: k bombo, s caja, h charles */
+const SONGS = {
+  title: { bpm: 132, lead: 'p25', arp: '0 2 1 2 0 2 1 2', bass: 'r - r - f - r r', drums: 'k h s h k k s h',
+    bars: [['C', 'C5 - E5 G5 C6 _ _ G5'], ['G', 'B5 _ A5 G5 D5 _ G5 _'], ['Am', 'A4 - C5 E5 A5 _ G5 E5'], ['F', 'F5 _ A5 _ C6 _ A5 _'],
+      ['Dm', 'D5 - F5 A5 D6 _ C6 A5'], ['G', 'B5 _ D6 _ G5 _ B5 _'], ['F', 'A5 G5 F5 E5 F5 _ A5 _'], ['G', 'G5 _ B5 _ D6 _ _ -']] },
+  map: { bpm: 138, lead: 'square', arp: 'x 1 x 2 x 1 x 2', bass: 'r - f - r - f -', drums: 'k - h - s - h -',
+    bars: [['G', 'D5 - G5 - B5 A5 G5 -'], ['C', 'E5 - G5 - C6 B5 G5 -'], ['G', 'D5 G5 B5 D6 B5 _ G5 -'], ['D', 'A5 _ F#5 _ D5 _ - -'],
+      ['Em', 'E5 - G5 - B5 A5 G5 -'], ['C', 'E5 G5 C6 _ B5 _ A5 _'], ['D', 'F#5 _ A5 _ D6 _ C6 _'], ['G', 'B5 _ G5 _ G5 _ - -']] },
+  w0: { bpm: 108, lead: 'p25', arp: '0 1 2 1 0 1 2 1', bass: 'r - - - f - - -', drums: 'k - h - s - h -',
+    bars: [['C', 'E5 _ G5 _ C6 _ G5 _'], ['Am', 'A5 _ E5 _ C5 _ E5 _'], ['F', 'F5 _ A5 _ C6 _ A5 F5'], ['G', 'G5 _ B5 _ D6 _ B5 _'],
+      ['C', 'E5 G5 C6 _ E6 _ D6 C6'], ['Em', 'B5 _ G5 _ E5 _ G5 B5'], ['F', 'A5 _ C6 _ A5 G5 F5 _'], ['G', 'G5 _ _ D5 G5 _ - -']] },
+  w1: { bpm: 116, lead: 'p25', arp: '0 1 2 3 2 1 2 1', bass: 'r - - - f - - -', drums: 'k - h - - - h -',
+    bars: [['F', 'A5 _ C6 _ A5 F5 G5 A5'], ['Bb', 'Bb5 _ D6 _ Bb5 _ F5 _'], ['C', 'G5 _ E5 G5 C6 _ Bb5 _'], ['F', 'A5 _ _ F5 C5 _ F5 _'],
+      ['Dm', 'D5 F5 A5 _ D6 _ C6 A5'], ['Bb', 'Bb5 _ A5 G5 F5 _ D5 _'], ['C', 'E5 _ G5 _ C6 Bb5 G5 E5'], ['F', 'F5 _ _ _ - - C5 -']] },
+  w2: { bpm: 104, lead: 'triangle', lv: 0.085, arp: '0 2 1 2 0 2 1 2', bass: 'r - - r - - f -', drums: 'k - h - - - h h',
+    bars: [['Dm', 'D5 _ F5 _ A5 _ G5 F5'], ['C', 'E5 _ G5 _ C5 _ E5 _'], ['Bb', 'D5 _ F5 _ Bb5 _ A5 G5'], ['A', 'A5 _ _ E5 C#5 _ E5 _'],
+      ['Dm', 'D5 F5 A5 D6 _ _ C6 A5'], ['Gm', 'Bb5 _ G5 _ D5 _ G5 Bb5'], ['A', 'A5 _ C#6 _ E6 _ C#6 A5'], ['Dm', 'D6 _ _ A5 F5 _ D5 _']] },
+  w3: { bpm: 92, lead: 'sine', lv: 0.085, arp: '0 1 2 3 2 1 0 1', arpW: 'triangle', av: 0.04, bass: 'r - - - - - f -', drums: '- - - - h - - -', echo: 0.4,
+    bars: [['FM7', 'A5 _ _ C6 E6 _ _ C6'], ['Em7', 'B5 _ _ G5 D6 _ B5 _'], ['Dm7', 'A5 _ F5 _ C6 _ A5 _'], ['CM7', 'G5 _ _ E5 B5 _ _ -'],
+      ['FM7', 'A5 C6 E6 _ _ C6 A5 _'], ['G6', 'B5 _ D6 _ E6 _ D6 B5'], ['Am7', 'C6 _ _ A5 G5 _ E5 _'], ['G', 'D5 _ G5 _ B5 _ _ -']] },
+  w4: { bpm: 100, lead: 'square', lv: 0.042, arp: 'x 0 x 2 x 1 x 2', bass: 'r - r - f - r -', drums: 'k - s - k s s -',
+    bars: [['Am', 'A4 - A4 C5 E5 _ A5 _'], ['F', 'F5 _ A5 _ C6 _ A5 F5'], ['G', 'G5 _ B5 _ D6 _ B5 G5'], ['E', 'E5 _ G#5 _ B5 _ _ -'],
+      ['Am', 'A5 - A5 C6 E6 _ D6 C6'], ['Dm', 'D6 _ A5 _ F5 _ D5 _'], ['E', 'E5 G#5 B5 _ E6 _ D6 B5'], ['Am', 'A5 _ _ E5 A4 _ - -']] },
+  w5: { bpm: 132, lead: 'p12', lv: 0.055, arp: 'x 0 x 1 x 2 x 1', bass: 'r - f - r - f -', drums: 'k h s h k h s s',
+    bars: [['C', 'E5 - G5 - E5 - C5 -'], ['Am', 'E5 - A5 - E5 - C5 -'], ['F', 'F5 - A5 - C6 - A5 -'], ['G', 'B5 A5 G5 F#5 G5 - D5 -'],
+      ['C', 'E5 G5 C6 - G5 - E5 -'], ['E', 'E5 G#5 B5 - G#5 - E5 -'], ['F', 'A5 - C6 - F6 - C6 A5'], ['G', 'G5 - B5 - D6 D6 - -']] },
+  w6: { bpm: 84, lead: 'triangle', lv: 0.09, arp: '0 - - 2 - - 1 -', arpW: 'p12', bass: 'r - - - - - - r', drums: 'k - - - - - h -', echo: 0.45,
+    bars: [['Em', 'E5 _ _ _ G5 _ B5 _'], ['F', 'A5 _ _ F5 _ _ C5 _'], ['Em', 'B4 _ E5 _ G5 _ _ F#5'], ['Dm', 'F5 _ _ D5 A4 _ _ -'],
+      ['Em', 'E5 _ G5 _ B5 _ E6 _'], ['C', 'E6 _ C6 _ G5 _ E5 _'], ['Am', 'A5 _ _ E5 C5 _ A4 _'], ['B', 'B4 _ D#5 _ F#5 _ _ -']] },
+  boss: { bpm: 152, lead: 'p25', arp: '0 2 1 2 0 2 1 2', bass: 'r r o r r r o r', drums: 'k h s h k k s h',
+    bars: [['Am', 'A5 A5 - A5 C6 - A5 -'], ['Am', 'E6 - D6 C6 A5 - G5 -'], ['F', 'F5 F5 - F5 A5 - C6 -'], ['G', 'D6 - B5 G5 B5 - D6 -'],
+      ['Am', 'A5 A5 - A5 C6 - E6 -'], ['Am', 'E6 D6 C6 B5 A5 - E5 -'], ['F', 'F5 A5 C6 F6 _ - C6 -'], ['E', 'E6 _ B5 _ G#5 _ B5 -']] }
+};
+/* versión tranquila de cada mundo, para la teoría y la lista de etapas */
+for (let i = 0; i <= 6; i++) {
+  const s = SONGS['w' + i];
+  SONGS['w' + i + 'c'] = Object.assign({}, s, { bpm: Math.round(s.bpm * 0.82), lead: 'triangle', lv: 0.085, arpW: 'sine', av: 0.035, bass: 'r - - - f - - -', drums: null, echo: 0.38 });
+}
+Object.keys(SONGS).forEach(id => {
+  const s = SONGS[id], steps = [];
+  s.bars.forEach(([ch, mel]) => { const c = chord(ch); mel.split(' ').forEach((tok, i) => steps.push({ c, tok, i })); });
+  const lead = [];
+  for (let i = 0; i < steps.length; i++) {
+    const tk = steps[i].tok;
+    if (tk === '-' || tk === '_') continue;
+    let len = 1;
+    while (i + len < steps.length && steps[i + len].tok === '_') len++;
+    lead[i] = { f: noteHz(tk), len };
+  }
+  s.c = { steps, lead, arp: s.arp.split(' '), bass: s.bass.split(' '), drums: s.drums ? s.drums.split(' ') : null };
+});
+
+function pulse(duty) {
+  const n = 32, re = new Float32Array(n), im = new Float32Array(n);
+  for (let k = 1; k < n; k++) re[k] = 2 / (k * Math.PI) * Math.sin(k * Math.PI * duty);
+  return ac.createPeriodicWave(re, im);
+}
+function ctx() {
+  if (ac) return ac;
+  if (root.LA_NO_AUDIO) return null;   // capturas de video: sin audio en vivo
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  ac = new AC();
+  const comp = ac.createDynamicsCompressor();
+  master = ac.createGain(); master.gain.value = 0.9;
+  master.connect(comp); comp.connect(ac.destination);
+  bus = ac.createGain(); bus.gain.value = opt.mv; bus.connect(master);
+  sfxBus = ac.createGain(); sfxBus.gain.value = opt.sv; sfxBus.connect(master);
+  waves.p25 = pulse(0.25); waves.p12 = pulse(0.125);
+  const len = ac.sampleRate, buf = ac.createBuffer(1, len, len), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  noise = buf;
+  timer = setInterval(tick, 40);
+  return ac;
+}
+function voice(wave, f, t, dur, vol, dest, pluck) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  if (waves[wave]) o.setPeriodicWave(waves[wave]); else o.type = wave;
+  o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.006);
+  if (pluck) g.gain.exponentialRampToValueAtTime(vol * 0.12, t + dur);
+  else g.gain.setValueAtTime(vol, Math.max(t + 0.006, t + dur - 0.035));
+  g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.004);
+  o.connect(g); g.connect(dest);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+function drum(kind, t, dest) {
+  const g = ac.createGain();
+  g.connect(dest);
+  if (kind === 'k') {
+    const o = ac.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(46, t + 0.11);
+    g.gain.setValueAtTime(0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    o.connect(g); o.start(t); o.stop(t + 0.16);
+    return;
+  }
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), hat = kind === 'h', dur = hat ? 0.04 : 0.13;
+  src.buffer = noise;
+  f.type = 'highpass'; f.frequency.value = hat ? 7000 : 1600;
+  g.gain.setValueAtTime(hat ? 0.03 : 0.07, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(g);
+  src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
+}
+function schedStep(m, i, t) {
+  const s = m.song, c = s.c, st = c.steps[i], d = m.stepDur, bi = st.i;
+  const le = c.lead[i];
+  if (le) voice(s.lead, le.f, t, le.len * d * 0.94, s.lv || 0.048, m.g);
+  const a = c.arp[bi];
+  if (a !== 'x' && a !== '-') {
+    const iv = st.c.iv, k = +a;
+    const semi = k < iv.length ? iv[k] : iv[k - iv.length] + 12;
+    voice(s.arpW || 'p12', hzOf(st.c.root + semi, st.c.root >= 7 ? 3 : 4), t, d * 0.85, s.av || 0.024, m.g, true);
+  }
+  const b = c.bass[bi];
+  if (b !== '-') voice('triangle', hzOf(st.c.root + (b === 'f' ? 7 : b === 'o' ? 12 : 0), st.c.root >= 7 ? 2 : 3), t, d * 0.9, 0.11, m.g);
+  if (c.drums && c.drums[bi] !== '-') drum(c.drums[bi], t, m.g);
+}
+function tick() {
+  if (!cur || ac.state !== 'running') return;
+  const now = ac.currentTime;
+  if (cur.next < now - 0.05) cur.next = now + 0.05;
+  while (cur.next < now + 0.16) {
+    schedStep(cur, cur.step, cur.next);
+    cur.next += cur.stepDur;
+    cur.step = (cur.step + 1) % cur.song.c.steps.length;
+  }
+}
+function stopSong() {
+  if (!cur) return;
+  const m = cur, now = ac.currentTime;
+  cur = null;
+  m.g.gain.cancelScheduledValues(now);
+  m.g.gain.setTargetAtTime(0, now, 0.12);
+  setTimeout(() => { try { m.g.disconnect(); m.wet.disconnect(); } catch (e) { /* ya desconectado */ } }, 1500);
+}
+function startSong(id) {
+  const song = SONGS[id], now = ac.currentTime, stepDur = 30 / song.bpm;
+  const g = ac.createGain(), delay = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
+  g.gain.setValueAtTime(0, now);
+  g.gain.linearRampToValueAtTime(1, now + 0.5);
+  delay.delayTime.value = stepDur * 1.5;
+  fb.gain.value = 0.3; wet.gain.value = song.echo || 0.2;
+  g.connect(bus); g.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(bus);
+  cur = { id, song, g, wet, stepDur, step: 0, next: now + 0.12 };
+}
+function sync() {
+  if (!ac) return;
+  const id = opt.music ? want : null;
+  if (cur && cur.id === id) return;
+  stopSong();
+  if (id && SONGS[id]) startSong(id);
+}
+function sfxTone(freq, dur, when, type, vol) {
+  if (!opt.sfx || !ctx()) return;
+  voice(type || 'square', freq, ac.currentTime + (when || 0), dur, vol || 0.05, sfxBus, true);
+}
+function duck(sec) {
+  if (!ac) return;
+  const now = ac.currentTime;
+  bus.gain.cancelScheduledValues(now);
+  bus.gain.setTargetAtTime(opt.mv * 0.25, now, 0.04);
+  bus.gain.setTargetAtTime(opt.mv, now + sec, 0.25);
+}
+const VOICE = [659.3, 740, 784, 880, 987.8];
+const api = {
+  /* primer gesto del jugador: el navegador solo deja sonar a partir de aquí */
+  unlock() { try { if (ctx() && ac.state === 'suspended') ac.resume(); sync(); } catch (e) { /* sin audio */ } },
+  set(o) {
+    Object.assign(opt, o);
+    try {
+      if (ac) {
+        const now = ac.currentTime;
+        bus.gain.cancelScheduledValues(now);
+        bus.gain.setTargetAtTime(opt.mv, now, 0.05);
+        sfxBus.gain.setTargetAtTime(opt.sv, now, 0.05);
+      }
+      sync();
+    } catch (e) { /* sin audio */ }
+  },
+  info() { return { state: ac ? ac.state : 'sin iniciar', song: cur ? cur.id : null, step: cur ? cur.step : null, want }; },
+  play(id) { want = id; try { sync(); } catch (e) { /* sin audio */ } },
+  /* voz de Minerva: un pitido por cada pocas letras, como los cuadros de diálogo de GBA */
+  blip() { try { sfxTone(VOICE[Math.floor(Math.random() * VOICE.length)], 0.045, 0, 'p25', 0.032); } catch (e) { /* sin audio */ } },
+  sfx: {
+    sel: () => sfxTone(880, 0.06),
+    page: () => sfxTone(620, 0.05),
+    ok: () => { sfxTone(660, 0.08); sfxTone(990, 0.12, 0.07); },
+    err: () => { sfxTone(196, 0.14, 0, 'sawtooth', 0.06); sfxTone(147, 0.2, 0.1, 'sawtooth', 0.06); },
+    win: () => { duck(1.3); [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => sfxTone(f, i === 6 ? 0.5 : 0.16, i * 0.11, 'p25', 0.07)); }
+  }
+};
+Object.keys(api.sfx).forEach(k => { const f = api.sfx[k]; api.sfx[k] = () => { try { f(); } catch (e) { /* sin audio */ } }; });
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!ac) return;
+    if (document.hidden) ac.suspend(); else if (opt.music || opt.sfx) ac.resume();
+  });
+}
+root.LAudio = api;
+root.LAudioSongs = SONGS;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script type="text/plain" id="la-es">
 window.LA_LANG = 'es';
 /* Lógica Advance — núcleo lógico: fórmulas, pruebas de Fitch y reglas */
 (function (root) {
@@ -1992,307 +2298,6 @@ const w6 = {
 root.CONTENT = { RS, worlds: [w0, w1, w2, w3, w4, w5, w6] };
 })(typeof window !== 'undefined' ? window : globalThis);
 
-/* Lógica Advance — Minerva, la lechuza (24×24) y sus expresiones */
-(function (root) {
-'use strict';
-
-const BASE = [
-  '........................',
-  '.....CCCCCCCCCCCCCC.....',
-  '....CCCCCCCCCCCCCCCC....',
-  '..K....cccccccccc.T..K..',
-  '.KBK...CCCCCCCCCC.T.KBK.',
-  '.KBBKKKKKKKKKKKKKKTKBBK.',
-  '.KBBBBBBBBBBBBBBBTTTBBK.',
-  '.KBBBWWWWBBDDBBWWWWBBBK.',
-  '.KBBWWWWWWBDDBWWWWWWBBK.',
-  '.KBBWWHPWWBDDBWWHPWWBBK.',
-  '.KBBWWPPWWBYYBWWPPWWBBK.',
-  '.KBBWWWWWWBYYBWWWWWWBBK.',
-  '.KBBBWWWWBBOOBBWWWWBBBK.',
-  '.KBBBBBBBBBBBBBBBBBBBBK.',
-  '..KBBBBBBBBBBBBBBBBBBK..',
-  '..KDBBLLLLLLLLLLLLBBDK..',
-  '.KDDBLLLMLLLLLLMLLLBDDK.',
-  '.KDDBLLLLLLMMLLLLLLBDDK.',
-  '.KDDBLLLMLLLLLLMLLLBDDK.',
-  '.KDDBLLLLLLMMLLLLLLBDDK.',
-  '..KDBBLLLLLLLLLLLLBBDK..',
-  '...KKBBBBBBBBBBBBBBKK...',
-  '....KYYYYK....KYYYYK....',
-  '....KKKKKK....KKKKKK....'
-];
-const PAL = {
-  K: '#2b2148', B: '#b0703f', D: '#844d2a', L: '#ffe2ac', M: '#e9bd7a', W: '#ffffff', P: '#1d1438', H: '#ffffff',
-  Y: '#ffb52e', O: '#e8862a', C: '#4347a0', c: '#2f327a', T: '#ffcf2e', R: '#ff8fa0', S: '#7cc7ff'
-};
-/* ojos: 6×6 desde la fila 7; el izquierdo en la columna 4 y el derecho, reflejado, en la 14 */
-const EYE = {
-  blink: ['BBBBBB', 'BBBBBB', 'BBBBBB', 'KKKKKK', 'BBBBBB', 'BBBBBB'],
-  happy: ['BBBBBB', 'BBKKBB', 'BKBBKB', 'KBBBBK', 'BBBBBB', 'BBBBBB'],
-  sad: ['BBBBKK', 'BBKKWW', 'KKWWWW', 'WWHPWW', 'WWPPWW', 'BWWWWB'],
-  think: ['BWWWWB', 'WWWHPW', 'WWWPPW', 'WWWWWW', 'WWWWWW', 'BWWWWB'],
-  brave: ['BKKBBB', 'WWWKKB', 'WWWWWK', 'WWHPWW', 'WWPPWW', 'BWWWWB']
-};
-const SAME_SIDE = { think: true };
-/* detalles fijos de cada expresión: [x, y, píxeles] */
-const EXTRA = {
-  happy: [[3, 11, 'RR'], [3, 12, 'RR'], [19, 11, 'RR'], [19, 12, 'RR'], [11, 11, 'PP']],
-  sad: [[20, 7, 'S'], [20, 8, 'SS'], [20, 9, 'SS']],
-  think: [[22, 0, 'T'], [21, 1, 'TTT'], [21, 2, 'TTT'], [22, 3, 'c']]
-};
-const SPARK = [[1, 0, 'T'], [0, 1, 'TTT'], [1, 2, 'T'], [22, 0, 'T'], [21, 1, 'TTT'], [22, 2, 'T']];
-const BEAK_OPEN = [[11, 11, 'PP']];
-
-const mirror = s => s.split('').reverse().join('').replace(/PH/g, 'HP');
-function eyePatch(name) {
-  const rows = EYE[name], out = [];
-  rows.forEach((r, i) => {
-    out.push([4, 7 + i, r]);
-    out.push([14, 7 + i, SAME_SIDE[name] ? r : mirror(r)]);
-  });
-  return out;
-}
-/* parches que convierten la base en la expresión pedida */
-function patches(mood) {
-  let p = [];
-  if (EYE[mood]) p = p.concat(eyePatch(mood));
-  if (EXTRA[mood]) p = p.concat(EXTRA[mood]);
-  return p;
-}
-function grid(mood) {
-  const g = BASE.map(r => r.split(''));
-  patches(mood).forEach(([x, y, s]) => { for (let i = 0; i < s.length; i++) g[y][x + i] = s[i]; });
-  return g;
-}
-
-root.SPRITE = { N: 24, BASE, PAL, SPARK, BEAK_OPEN, patches, eyePatch, grid };
-})(typeof window !== 'undefined' ? window : globalThis);
-
-/* Lógica Advance — sonido: efectos, voz del texto y música por secciones (sintetizada, estilo GBA) */
-(function (root) {
-'use strict';
-
-let ac = null, master = null, bus = null, sfxBus = null, noise = null, timer = null;
-const waves = {};
-const opt = { sfx: true, music: true, mv: 0.22, sv: 1 };   // mv y sv: ganancia de música y de efectos
-let want = null;   // canción pedida
-let cur = null;    // canción sonando
-
-const SEMI = { C: 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, F: 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11 };
-const QUAL = { '': [0, 4, 7], m: [0, 3, 7], 7: [0, 4, 7, 10], M7: [0, 4, 7, 11], m7: [0, 3, 7, 10], 6: [0, 4, 7, 9] };
-const hzOf = (semi, oct) => 440 * Math.pow(2, (semi + (oct - 4) * 12 - 9) / 12);
-function noteHz(n) { const m = /^([A-G][#b]?)(\d)$/.exec(n); return hzOf(SEMI[m[1]], +m[2]); }
-function chord(sym) { const m = /^([A-G][#b]?)(.*)$/.exec(sym); return { root: SEMI[m[1]], iv: QUAL[m[2]] }; }
-
-/* Cada compás: [acorde, melodía en ocho corcheas]. «-» silencio, «_» alarga la nota anterior.
-   arp: índices de las notas del acorde · bass: r raíz, f quinta, o octava · drums: k bombo, s caja, h charles */
-const SONGS = {
-  title: { bpm: 132, lead: 'p25', arp: '0 2 1 2 0 2 1 2', bass: 'r - r - f - r r', drums: 'k h s h k k s h',
-    bars: [['C', 'C5 - E5 G5 C6 _ _ G5'], ['G', 'B5 _ A5 G5 D5 _ G5 _'], ['Am', 'A4 - C5 E5 A5 _ G5 E5'], ['F', 'F5 _ A5 _ C6 _ A5 _'],
-      ['Dm', 'D5 - F5 A5 D6 _ C6 A5'], ['G', 'B5 _ D6 _ G5 _ B5 _'], ['F', 'A5 G5 F5 E5 F5 _ A5 _'], ['G', 'G5 _ B5 _ D6 _ _ -']] },
-  map: { bpm: 138, lead: 'square', arp: 'x 1 x 2 x 1 x 2', bass: 'r - f - r - f -', drums: 'k - h - s - h -',
-    bars: [['G', 'D5 - G5 - B5 A5 G5 -'], ['C', 'E5 - G5 - C6 B5 G5 -'], ['G', 'D5 G5 B5 D6 B5 _ G5 -'], ['D', 'A5 _ F#5 _ D5 _ - -'],
-      ['Em', 'E5 - G5 - B5 A5 G5 -'], ['C', 'E5 G5 C6 _ B5 _ A5 _'], ['D', 'F#5 _ A5 _ D6 _ C6 _'], ['G', 'B5 _ G5 _ G5 _ - -']] },
-  w0: { bpm: 108, lead: 'p25', arp: '0 1 2 1 0 1 2 1', bass: 'r - - - f - - -', drums: 'k - h - s - h -',
-    bars: [['C', 'E5 _ G5 _ C6 _ G5 _'], ['Am', 'A5 _ E5 _ C5 _ E5 _'], ['F', 'F5 _ A5 _ C6 _ A5 F5'], ['G', 'G5 _ B5 _ D6 _ B5 _'],
-      ['C', 'E5 G5 C6 _ E6 _ D6 C6'], ['Em', 'B5 _ G5 _ E5 _ G5 B5'], ['F', 'A5 _ C6 _ A5 G5 F5 _'], ['G', 'G5 _ _ D5 G5 _ - -']] },
-  w1: { bpm: 116, lead: 'p25', arp: '0 1 2 3 2 1 2 1', bass: 'r - - - f - - -', drums: 'k - h - - - h -',
-    bars: [['F', 'A5 _ C6 _ A5 F5 G5 A5'], ['Bb', 'Bb5 _ D6 _ Bb5 _ F5 _'], ['C', 'G5 _ E5 G5 C6 _ Bb5 _'], ['F', 'A5 _ _ F5 C5 _ F5 _'],
-      ['Dm', 'D5 F5 A5 _ D6 _ C6 A5'], ['Bb', 'Bb5 _ A5 G5 F5 _ D5 _'], ['C', 'E5 _ G5 _ C6 Bb5 G5 E5'], ['F', 'F5 _ _ _ - - C5 -']] },
-  w2: { bpm: 104, lead: 'triangle', lv: 0.085, arp: '0 2 1 2 0 2 1 2', bass: 'r - - r - - f -', drums: 'k - h - - - h h',
-    bars: [['Dm', 'D5 _ F5 _ A5 _ G5 F5'], ['C', 'E5 _ G5 _ C5 _ E5 _'], ['Bb', 'D5 _ F5 _ Bb5 _ A5 G5'], ['A', 'A5 _ _ E5 C#5 _ E5 _'],
-      ['Dm', 'D5 F5 A5 D6 _ _ C6 A5'], ['Gm', 'Bb5 _ G5 _ D5 _ G5 Bb5'], ['A', 'A5 _ C#6 _ E6 _ C#6 A5'], ['Dm', 'D6 _ _ A5 F5 _ D5 _']] },
-  w3: { bpm: 92, lead: 'sine', lv: 0.085, arp: '0 1 2 3 2 1 0 1', arpW: 'triangle', av: 0.04, bass: 'r - - - - - f -', drums: '- - - - h - - -', echo: 0.4,
-    bars: [['FM7', 'A5 _ _ C6 E6 _ _ C6'], ['Em7', 'B5 _ _ G5 D6 _ B5 _'], ['Dm7', 'A5 _ F5 _ C6 _ A5 _'], ['CM7', 'G5 _ _ E5 B5 _ _ -'],
-      ['FM7', 'A5 C6 E6 _ _ C6 A5 _'], ['G6', 'B5 _ D6 _ E6 _ D6 B5'], ['Am7', 'C6 _ _ A5 G5 _ E5 _'], ['G', 'D5 _ G5 _ B5 _ _ -']] },
-  w4: { bpm: 100, lead: 'square', lv: 0.042, arp: 'x 0 x 2 x 1 x 2', bass: 'r - r - f - r -', drums: 'k - s - k s s -',
-    bars: [['Am', 'A4 - A4 C5 E5 _ A5 _'], ['F', 'F5 _ A5 _ C6 _ A5 F5'], ['G', 'G5 _ B5 _ D6 _ B5 G5'], ['E', 'E5 _ G#5 _ B5 _ _ -'],
-      ['Am', 'A5 - A5 C6 E6 _ D6 C6'], ['Dm', 'D6 _ A5 _ F5 _ D5 _'], ['E', 'E5 G#5 B5 _ E6 _ D6 B5'], ['Am', 'A5 _ _ E5 A4 _ - -']] },
-  w5: { bpm: 132, lead: 'p12', lv: 0.055, arp: 'x 0 x 1 x 2 x 1', bass: 'r - f - r - f -', drums: 'k h s h k h s s',
-    bars: [['C', 'E5 - G5 - E5 - C5 -'], ['Am', 'E5 - A5 - E5 - C5 -'], ['F', 'F5 - A5 - C6 - A5 -'], ['G', 'B5 A5 G5 F#5 G5 - D5 -'],
-      ['C', 'E5 G5 C6 - G5 - E5 -'], ['E', 'E5 G#5 B5 - G#5 - E5 -'], ['F', 'A5 - C6 - F6 - C6 A5'], ['G', 'G5 - B5 - D6 D6 - -']] },
-  w6: { bpm: 84, lead: 'triangle', lv: 0.09, arp: '0 - - 2 - - 1 -', arpW: 'p12', bass: 'r - - - - - - r', drums: 'k - - - - - h -', echo: 0.45,
-    bars: [['Em', 'E5 _ _ _ G5 _ B5 _'], ['F', 'A5 _ _ F5 _ _ C5 _'], ['Em', 'B4 _ E5 _ G5 _ _ F#5'], ['Dm', 'F5 _ _ D5 A4 _ _ -'],
-      ['Em', 'E5 _ G5 _ B5 _ E6 _'], ['C', 'E6 _ C6 _ G5 _ E5 _'], ['Am', 'A5 _ _ E5 C5 _ A4 _'], ['B', 'B4 _ D#5 _ F#5 _ _ -']] },
-  boss: { bpm: 152, lead: 'p25', arp: '0 2 1 2 0 2 1 2', bass: 'r r o r r r o r', drums: 'k h s h k k s h',
-    bars: [['Am', 'A5 A5 - A5 C6 - A5 -'], ['Am', 'E6 - D6 C6 A5 - G5 -'], ['F', 'F5 F5 - F5 A5 - C6 -'], ['G', 'D6 - B5 G5 B5 - D6 -'],
-      ['Am', 'A5 A5 - A5 C6 - E6 -'], ['Am', 'E6 D6 C6 B5 A5 - E5 -'], ['F', 'F5 A5 C6 F6 _ - C6 -'], ['E', 'E6 _ B5 _ G#5 _ B5 -']] }
-};
-/* versión tranquila de cada mundo, para la teoría y la lista de etapas */
-for (let i = 0; i <= 6; i++) {
-  const s = SONGS['w' + i];
-  SONGS['w' + i + 'c'] = Object.assign({}, s, { bpm: Math.round(s.bpm * 0.82), lead: 'triangle', lv: 0.085, arpW: 'sine', av: 0.035, bass: 'r - - - f - - -', drums: null, echo: 0.38 });
-}
-Object.keys(SONGS).forEach(id => {
-  const s = SONGS[id], steps = [];
-  s.bars.forEach(([ch, mel]) => { const c = chord(ch); mel.split(' ').forEach((tok, i) => steps.push({ c, tok, i })); });
-  const lead = [];
-  for (let i = 0; i < steps.length; i++) {
-    const tk = steps[i].tok;
-    if (tk === '-' || tk === '_') continue;
-    let len = 1;
-    while (i + len < steps.length && steps[i + len].tok === '_') len++;
-    lead[i] = { f: noteHz(tk), len };
-  }
-  s.c = { steps, lead, arp: s.arp.split(' '), bass: s.bass.split(' '), drums: s.drums ? s.drums.split(' ') : null };
-});
-
-function pulse(duty) {
-  const n = 32, re = new Float32Array(n), im = new Float32Array(n);
-  for (let k = 1; k < n; k++) re[k] = 2 / (k * Math.PI) * Math.sin(k * Math.PI * duty);
-  return ac.createPeriodicWave(re, im);
-}
-function ctx() {
-  if (ac) return ac;
-  if (root.LA_NO_AUDIO) return null;   // capturas de video: sin audio en vivo
-  const AC = window.AudioContext || window.webkitAudioContext;
-  if (!AC) return null;
-  ac = new AC();
-  const comp = ac.createDynamicsCompressor();
-  master = ac.createGain(); master.gain.value = 0.9;
-  master.connect(comp); comp.connect(ac.destination);
-  bus = ac.createGain(); bus.gain.value = opt.mv; bus.connect(master);
-  sfxBus = ac.createGain(); sfxBus.gain.value = opt.sv; sfxBus.connect(master);
-  waves.p25 = pulse(0.25); waves.p12 = pulse(0.125);
-  const len = ac.sampleRate, buf = ac.createBuffer(1, len, len), d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
-  noise = buf;
-  timer = setInterval(tick, 40);
-  return ac;
-}
-function voice(wave, f, t, dur, vol, dest, pluck) {
-  const o = ac.createOscillator(), g = ac.createGain();
-  if (waves[wave]) o.setPeriodicWave(waves[wave]); else o.type = wave;
-  o.frequency.value = f;
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.linearRampToValueAtTime(vol, t + 0.006);
-  if (pluck) g.gain.exponentialRampToValueAtTime(vol * 0.12, t + dur);
-  else g.gain.setValueAtTime(vol, Math.max(t + 0.006, t + dur - 0.035));
-  g.gain.linearRampToValueAtTime(0.0001, t + dur + 0.004);
-  o.connect(g); g.connect(dest);
-  o.start(t); o.stop(t + dur + 0.03);
-}
-function drum(kind, t, dest) {
-  const g = ac.createGain();
-  g.connect(dest);
-  if (kind === 'k') {
-    const o = ac.createOscillator();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(150, t);
-    o.frequency.exponentialRampToValueAtTime(46, t + 0.11);
-    g.gain.setValueAtTime(0.2, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
-    o.connect(g); o.start(t); o.stop(t + 0.16);
-    return;
-  }
-  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), hat = kind === 'h', dur = hat ? 0.04 : 0.13;
-  src.buffer = noise;
-  f.type = 'highpass'; f.frequency.value = hat ? 7000 : 1600;
-  g.gain.setValueAtTime(hat ? 0.03 : 0.07, t);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(f); f.connect(g);
-  src.start(t, Math.random() * 0.5); src.stop(t + dur + 0.02);
-}
-function schedStep(m, i, t) {
-  const s = m.song, c = s.c, st = c.steps[i], d = m.stepDur, bi = st.i;
-  const le = c.lead[i];
-  if (le) voice(s.lead, le.f, t, le.len * d * 0.94, s.lv || 0.048, m.g);
-  const a = c.arp[bi];
-  if (a !== 'x' && a !== '-') {
-    const iv = st.c.iv, k = +a;
-    const semi = k < iv.length ? iv[k] : iv[k - iv.length] + 12;
-    voice(s.arpW || 'p12', hzOf(st.c.root + semi, st.c.root >= 7 ? 3 : 4), t, d * 0.85, s.av || 0.024, m.g, true);
-  }
-  const b = c.bass[bi];
-  if (b !== '-') voice('triangle', hzOf(st.c.root + (b === 'f' ? 7 : b === 'o' ? 12 : 0), st.c.root >= 7 ? 2 : 3), t, d * 0.9, 0.11, m.g);
-  if (c.drums && c.drums[bi] !== '-') drum(c.drums[bi], t, m.g);
-}
-function tick() {
-  if (!cur || ac.state !== 'running') return;
-  const now = ac.currentTime;
-  if (cur.next < now - 0.05) cur.next = now + 0.05;
-  while (cur.next < now + 0.16) {
-    schedStep(cur, cur.step, cur.next);
-    cur.next += cur.stepDur;
-    cur.step = (cur.step + 1) % cur.song.c.steps.length;
-  }
-}
-function stopSong() {
-  if (!cur) return;
-  const m = cur, now = ac.currentTime;
-  cur = null;
-  m.g.gain.cancelScheduledValues(now);
-  m.g.gain.setTargetAtTime(0, now, 0.12);
-  setTimeout(() => { try { m.g.disconnect(); m.wet.disconnect(); } catch (e) { /* ya desconectado */ } }, 1500);
-}
-function startSong(id) {
-  const song = SONGS[id], now = ac.currentTime, stepDur = 30 / song.bpm;
-  const g = ac.createGain(), delay = ac.createDelay(1), fb = ac.createGain(), wet = ac.createGain();
-  g.gain.setValueAtTime(0, now);
-  g.gain.linearRampToValueAtTime(1, now + 0.5);
-  delay.delayTime.value = stepDur * 1.5;
-  fb.gain.value = 0.3; wet.gain.value = song.echo || 0.2;
-  g.connect(bus); g.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(wet); wet.connect(bus);
-  cur = { id, song, g, wet, stepDur, step: 0, next: now + 0.12 };
-}
-function sync() {
-  if (!ac) return;
-  const id = opt.music ? want : null;
-  if (cur && cur.id === id) return;
-  stopSong();
-  if (id && SONGS[id]) startSong(id);
-}
-function sfxTone(freq, dur, when, type, vol) {
-  if (!opt.sfx || !ctx()) return;
-  voice(type || 'square', freq, ac.currentTime + (when || 0), dur, vol || 0.05, sfxBus, true);
-}
-function duck(sec) {
-  if (!ac) return;
-  const now = ac.currentTime;
-  bus.gain.cancelScheduledValues(now);
-  bus.gain.setTargetAtTime(opt.mv * 0.25, now, 0.04);
-  bus.gain.setTargetAtTime(opt.mv, now + sec, 0.25);
-}
-const VOICE = [659.3, 740, 784, 880, 987.8];
-const api = {
-  /* primer gesto del jugador: el navegador solo deja sonar a partir de aquí */
-  unlock() { try { if (ctx() && ac.state === 'suspended') ac.resume(); sync(); } catch (e) { /* sin audio */ } },
-  set(o) {
-    Object.assign(opt, o);
-    try {
-      if (ac) {
-        const now = ac.currentTime;
-        bus.gain.cancelScheduledValues(now);
-        bus.gain.setTargetAtTime(opt.mv, now, 0.05);
-        sfxBus.gain.setTargetAtTime(opt.sv, now, 0.05);
-      }
-      sync();
-    } catch (e) { /* sin audio */ }
-  },
-  info() { return { state: ac ? ac.state : 'sin iniciar', song: cur ? cur.id : null, step: cur ? cur.step : null, want }; },
-  play(id) { want = id; try { sync(); } catch (e) { /* sin audio */ } },
-  /* voz de Minerva: un pitido por cada pocas letras, como los cuadros de diálogo de GBA */
-  blip() { try { sfxTone(VOICE[Math.floor(Math.random() * VOICE.length)], 0.045, 0, 'p25', 0.032); } catch (e) { /* sin audio */ } },
-  sfx: {
-    sel: () => sfxTone(880, 0.06),
-    page: () => sfxTone(620, 0.05),
-    ok: () => { sfxTone(660, 0.08); sfxTone(990, 0.12, 0.07); },
-    err: () => { sfxTone(196, 0.14, 0, 'sawtooth', 0.06); sfxTone(147, 0.2, 0.1, 'sawtooth', 0.06); },
-    win: () => { duck(1.3); [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => sfxTone(f, i === 6 ? 0.5 : 0.16, i * 0.11, 'p25', 0.07)); }
-  }
-};
-Object.keys(api.sfx).forEach(k => { const f = api.sfx[k]; api.sfx[k] = () => { try { f(); } catch (e) { /* sin audio */ } }; });
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    if (!ac) return;
-    if (document.hidden) ac.suspend(); else if (opt.music || opt.sfx) ac.resume();
-  });
-}
-root.LAudio = api;
-root.LAudioSongs = SONGS;
-})(typeof window !== 'undefined' ? window : globalThis);
-
 /* Lógica Advance — interfaz */
 (function () {
 'use strict';
@@ -2507,6 +2512,8 @@ let fitTimer = null;
 window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { fit(); padShow(); }, 80); });
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fit());
 const soundBtn = () => `<button class="btn sm snd${save.mv + save.sv === 0 ? ' off' : ''}" data-act="sound" aria-label="Volumen: música ${save.mv} de 5, efectos ${save.sv} de 5" title="Volumen">${ico('spk')}<i class="vb">${meter(save.mv)}</i></button>`;
+/* el juego lleva los dos idiomas: el botón guarda la elección y recarga la página en el otro */
+const langBtn = () => `<button class="btn sm lng" data-act="lang" aria-label="Idioma: español. Cambiar a inglés" title="Idioma / Language"><b class="${EN ? '' : 'on'}">ES</b><b class="${EN ? 'on' : ''}">EN</b></button>`;
 function hud(title, back, sub) {
   return `<header class="hud">
     <button class="btn sm" data-act="${back}">${ico('back')}<span>Volver</span></button>
@@ -2520,7 +2527,7 @@ const starsHTML = n => `<span class="stars" aria-label="${n} de 3 estrellas">${[
 function scrTitle() {
   const any = Object.keys(save.done).length > 0;
   return `<section class="title">
-    <div class="tsnd">${soundBtn()}</div>
+    <div class="tsnd">${langBtn()}${soundBtn()}</div>
     <div class="logo"><span class="l1">L<span class="acc">O</span>GICA</span><span class="l2">ADVANCE</span></div>
     <p class="tag">Deducción natural al estilo Fitch en seis lógicas</p>
     <div class="hero">
@@ -2553,6 +2560,7 @@ function scrMap() {
     <span class="mlabel">OPCIONES</span>
     <button class="btn sm" data-act="free" aria-pressed="${save.free}">Modo libre: ${save.free ? 'sí' : 'no'}</button>
     <button class="btn sm" data-act="theme">Tema: ${themeName}</button>
+    <button class="btn sm" data-act="lang">Idioma: español</button>
     <button class="btn sm" data-act="wipe">Borrar progreso</button>
     <span class="optnote">El modo libre abre todos los mundos y etapas.</span>
   </div>`;
@@ -3009,6 +3017,7 @@ const ACT = {
   },
   free() { save.free = !save.free; persist(); sfx.sel(); render(); },
   theme() { save.theme = { '': 'light', light: 'dark', dark: '' }[save.theme]; persist(); applyTheme(); sfx.sel(); render(); },
+  lang() { save.lang = EN ? 'es' : 'en'; persist(); location.reload(); },
   wipe() {
     showModal(`<h3>¿Borrar todo el progreso?</h3><p>Se perderán las etapas completadas y las estrellas.</p>
       <div class="mrow"><button class="btn pri" data-act="mcancel">No, volver</button><button class="btn" data-act="wipeYes">Sí, borrar</button></div>`);
@@ -3275,10 +3284,1735 @@ try {
   document.head.appendChild(link);
 } catch (e) { /* sin icono */ }
 
+/* textos fijos de la carcasa, en el idioma elegido */
+document.documentElement.lang = EN ? 'en' : 'es';
+document.title = 'Lógica Advance';
+document.querySelector('.brand').innerHTML = 'L<span class="acc">O</span>GICA <b>ADVANCE</b>';
+document.querySelector('.pad').setAttribute('aria-label', 'Controles de la consola');
+const PADTXT = { up: 'Arriba', down: 'Abajo', left: 'Izquierda', right: 'Derecha', L: 'L (tecla A)', R: 'R (tecla S)', A: 'A (tecla Z)', B: 'B (tecla X)', select: 'Select (Retroceso)', start: 'Start (Intro)' };
+document.querySelectorAll('.pad [data-pad]').forEach(b => { b.title = PADTXT[b.dataset.pad]; b.setAttribute('aria-label', PADTXT[b.dataset.pad]); });
+
 window.LogicaAdvance = { go, render, state: () => ST, owl };
 render();
 })();
 
+</script>
+<script type="text/plain" id="la-en">
+window.LA_LANG = 'en';
+/* Lógica Advance — núcleo lógico: fórmulas, pruebas de Fitch y reglas */
+(function (root) {
+'use strict';
+
+const VARS = 'xyzwuv';
+const NAMES = 'abcdefghijklmnopqrst';
+const isVar = c => VARS.includes(c);
+
+class LErr extends Error {}
+const fail = m => { throw new LErr(m); };
+
+/* ---------- fórmulas ---------- */
+const Atom = (p, args) => ({ t: 'atom', p, args: args || [] });
+const Bot = { t: 'bot' };
+const Not = a => ({ t: 'not', a });
+const Box = a => ({ t: 'box', a });
+const Dia = a => ({ t: 'dia', a });
+const Bin = (t, a, b) => ({ t, a, b });
+const And = (a, b) => Bin('and', a, b);
+const Or = (a, b) => Bin('or', a, b);
+const Imp = (a, b) => Bin('imp', a, b);
+const Iff = (a, b) => Bin('iff', a, b);
+const Qf = (t, v, a) => ({ t, v, a });
+const BIN = { and: '∧', or: '∨', imp: '→', iff: '↔' };
+
+function str(f, top) {
+  switch (f.t) {
+    case 'atom': return f.p + f.args.join('');
+    case 'bot': return '⊥';
+    case 'not': return '¬' + str(f.a, false);
+    case 'box': return '□' + str(f.a, false);
+    case 'dia': return '◇' + str(f.a, false);
+    case 'all': return '∀' + f.v + str(f.a, false);
+    case 'ex': return '∃' + f.v + str(f.a, false);
+    default: {
+      const s = str(f.a, false) + BIN[f.t] + str(f.b, false);
+      return top === false ? '(' + s + ')' : s;
+    }
+  }
+}
+const eq = (a, b) => str(a) === str(b);
+
+function parse(src) {
+  const s = String(src)
+    .replace(/<->/g, '↔').replace(/->/g, '→').replace(/\[\]/g, '□').replace(/<>/g, '◇')
+    .replace(/~/g, '¬').replace(/&/g, '∧').replace(/\|/g, '∨').replace(/#/g, '⊥')
+    .replace(/\s+/g, '');
+  let i = 0;
+  const eat = c => (s[i] === c ? (i++, true) : false);
+  function iff() { let a = imp(); while (eat('↔')) a = Iff(a, imp()); return a; }
+  function imp() { const a = or(); return eat('→') ? Imp(a, imp()) : a; }
+  function or() { let a = and(); while (eat('∨')) a = Or(a, and()); return a; }
+  function and() { let a = un(); while (eat('∧')) a = And(a, un()); return a; }
+  function un() {
+    const c = s[i];
+    if (c === '¬') { i++; return Not(un()); }
+    if (c === '□') { i++; return Box(un()); }
+    if (c === '◇') { i++; return Dia(un()); }
+    if (c === '∀' || c === '∃') {
+      i++;
+      const v = s[i];
+      if (!v || !isVar(v)) fail('After ' + c + ' comes a variable (x, y, z).');
+      i++;
+      return Qf(c === '∀' ? 'all' : 'ex', v, un());
+    }
+    if (c === '⊥') { i++; return Bot; }
+    if (c === '(') {
+      i++;
+      const a = iff();
+      if (!eat(')')) fail('A closing parenthesis is missing.');
+      return a;
+    }
+    if (c && c >= 'A' && c <= 'Z') {
+      i++;
+      const args = [];
+      while (s[i] && s[i] >= 'a' && s[i] <= 'z') args.push(s[i++]);
+      return Atom(c, args);
+    }
+    fail(c ? 'Did not expect "' + c + '" there.' : 'The formula is incomplete.');
+  }
+  if (!s) fail('Write a formula.');
+  const f = iff();
+  if (i < s.length) fail('Did not expect "' + s[i] + '" there.');
+  return f;
+}
+
+function subformulas(f, out) {
+  out = out || [];
+  out.push(f);
+  if (f.a) subformulas(f.a, out);
+  if (f.b) subformulas(f.b, out);
+  return out;
+}
+function size(f) { return subformulas(f).length; }
+
+function names(f, out) {
+  out = out || new Set();
+  if (f.t === 'atom') f.args.forEach(a => { if (!isVar(a)) out.add(a); });
+  if (f.a) names(f.a, out);
+  if (f.b) names(f.b, out);
+  return out;
+}
+function varsOf(f, out) {
+  out = out || new Set();
+  if (f.t === 'atom') f.args.forEach(a => { if (isVar(a)) out.add(a); });
+  if (f.v) out.add(f.v);
+  if (f.a) varsOf(f.a, out);
+  if (f.b) varsOf(f.b, out);
+  return out;
+}
+function freeVars(f, bound, out) {
+  bound = bound || new Set(); out = out || new Set();
+  if (f.t === 'atom') f.args.forEach(a => { if (isVar(a) && !bound.has(a)) out.add(a); });
+  else if (f.t === 'all' || f.t === 'ex') { const b2 = new Set(bound); b2.add(f.v); freeVars(f.a, b2, out); }
+  else { if (f.a) freeVars(f.a, bound, out); if (f.b) freeVars(f.b, bound, out); }
+  return out;
+}
+const closed = f => freeVars(f).size === 0;
+
+function subst(f, v, t) {
+  switch (f.t) {
+    case 'atom': return Atom(f.p, f.args.map(a => (a === v ? t : a)));
+    case 'bot': return f;
+    case 'not': case 'box': case 'dia': return { t: f.t, a: subst(f.a, v, t) };
+    case 'all': case 'ex': return f.v === v ? f : Qf(f.t, f.v, subst(f.a, v, t));
+    default: return Bin(f.t, subst(f.a, v, t), subst(f.b, v, t));
+  }
+}
+function countName(f, c) {
+  let k = 0;
+  subformulas(f).forEach(g => { if (g.t === 'atom') g.args.forEach(a => { if (a === c) k++; }); });
+  return k;
+}
+/* cambia apariciones del nombre c por la variable v; mask elige cuáles (bit i = aparición i) */
+function replName(f, c, v, mask) {
+  let k = 0;
+  const go = g => {
+    switch (g.t) {
+      case 'atom': return Atom(g.p, g.args.map(a => {
+        if (a !== c) return a;
+        const bit = 1 << k++;
+        return mask & bit ? v : a;
+      }));
+      case 'bot': return g;
+      case 'not': case 'box': case 'dia': return { t: g.t, a: go(g.a) };
+      case 'all': case 'ex': return Qf(g.t, g.v, go(g.a));
+      default: { const a = go(g.a); return Bin(g.t, a, go(g.b)); }
+    }
+  };
+  return go(f);
+}
+/* ¿inst es instancia de Qx A? → nombre usado, null si la variable no aparece, false si no lo es */
+function instName(q, inst) {
+  if (!freeVars(q.a).has(q.v)) return eq(q.a, inst) ? null : false;
+  for (const n of names(inst)) if (eq(subst(q.a, q.v, n), inst)) return n;
+  return false;
+}
+
+/* ---------- semántica de valores (clásica y LP) ---------- */
+function evalF(f, v) {
+  switch (f.t) {
+    case 'atom': return v[str(f)];
+    case 'bot': return 0;
+    case 'not': return 1 - evalF(f.a, v);
+    case 'and': return Math.min(evalF(f.a, v), evalF(f.b, v));
+    case 'or': return Math.max(evalF(f.a, v), evalF(f.b, v));
+    case 'imp': return Math.max(1 - evalF(f.a, v), evalF(f.b, v));
+    case 'iff': { const a = evalF(f.a, v), b = evalF(f.b, v); return Math.min(Math.max(1 - a, b), Math.max(1 - b, a)); }
+  }
+  fail('The formula cannot be evaluated');
+}
+function atomsOf(fs) {
+  const s = new Set();
+  fs.forEach(f => subformulas(f).forEach(g => { if (g.t === 'atom') s.add(str(g)); }));
+  return [...s].sort();
+}
+
+/* ---------- estado de la prueba ---------- */
+function newProof(premises) {
+  const st = { lines: [], subs: {}, open: [], nid: 1 };
+  premises.forEach(f => st.lines.push({ f, kind: 'prem', rule: 'Premise', cites: '', path: [] }));
+  return st;
+}
+const clone = st => JSON.parse(JSON.stringify(st));
+
+function openSub(st, kind, f) {
+  st = clone(st);
+  const id = st.nid++;
+  st.subs[id] = { id, kind, start: st.lines.length, end: null, parent: st.open.slice() };
+  st.open.push(id);
+  st.lines.push({ f: f || null, kind, rule: kind === 'hyp' ? 'Assumption' : '', cites: '', path: st.open.slice() });
+  return st;
+}
+const addHyp = (st, f) => openSub(st, 'hyp', f);
+const addStrict = st => openSub(st, 'strict', null);
+function closeSub(st) {
+  if (!st.open.length) fail('There is no open subproof.');
+  st = clone(st);
+  const id = st.open.pop();
+  st.subs[id].end = st.lines.length - 1;
+  return st;
+}
+
+function isPrefix(p, S) {
+  if (p.length > S.length) return false;
+  for (let i = 0; i < p.length; i++) if (p[i] !== S[i]) return false;
+  return true;
+}
+function strictBetween(st, p, S) {
+  let k = 0;
+  for (let j = p.length; j < S.length; j++) if (st.subs[S[j]].kind === 'strict') k++;
+  return k;
+}
+/* nº de fronteras estrictas entre la línea i y la posición S; -1 si no es accesible */
+function lineK(st, i, S) {
+  const ln = st.lines[i];
+  if (ln.kind === 'strict' || !isPrefix(ln.path, S)) return -1;
+  return strictBetween(st, ln.path, S);
+}
+function subK(st, sp, S) {
+  if (sp.end == null || !isPrefix(sp.parent, S)) return -1;
+  return strictBetween(st, sp.parent, S);
+}
+function subAt(st, lineNo) {
+  for (const id in st.subs) if (st.subs[id].start === lineNo - 1) return st.subs[id];
+  return null;
+}
+/* subprueba cerrada (la más externa) que contiene la línea i y que se puede citar desde aquí */
+function pickSub(st, i) {
+  for (const id of st.lines[i].path) {
+    const sp = st.subs[id];
+    if (sp.end != null) return subK(st, sp, st.open) === 0 ? sp : null;
+  }
+  return null;
+}
+function subInfo(st, sp) {
+  const endIdx = sp.end == null ? st.lines.length - 1 : sp.end;
+  const first = st.lines[sp.start], last = st.lines[endIdx];
+  const direct = last.path.length === sp.parent.length + 1;
+  return {
+    sp, kind: sp.kind, open: sp.end == null,
+    hyp: sp.kind === 'hyp' ? first.f : null,
+    last: direct && last.f ? last.f : null,
+    ref: (sp.start + 1) + '–' + (endIdx + 1)
+  };
+}
+function openHyps(st, base) {
+  const out = st.lines.filter(l => l.kind === 'prem').map(l => l.f);
+  base.forEach(id => { const sp = st.subs[id]; if (sp.kind === 'hyp') out.push(st.lines[sp.start].f); });
+  return out;
+}
+function namesInPlay(st, goal) {
+  const s = new Set();
+  st.lines.forEach(l => { if (l.f) names(l.f, s); });
+  if (goal) names(goal, s);
+  return [...s].sort();
+}
+function freshName(st, goal) {
+  const used = namesInPlay(st, goal);
+  return [...NAMES].find(n => !used.includes(n)) || 'a';
+}
+function relSet(st, goal) {
+  const s = new Set();
+  const add = f => subformulas(f).forEach(g => s.add(str(g)));
+  if (goal) add(goal);
+  st.lines.forEach(l => { if (l.f && l.kind !== 'step') add(l.f); });
+  return s;
+}
+
+/* ---------- reglas ---------- */
+const one = (c, msg) => {
+  if (c.L.length !== 1) fail(msg || 'Select exactly one line.');
+  return c.L[0];
+};
+const two = (c, msg) => { if (c.L.length !== 2) fail(msg); return c.L; };
+function hypSub(c, i) {
+  const s = c.subs[i || 0];
+  if (s.kind !== 'hyp') fail('That subproof is strict (it begins with □): it is closed with □I.');
+  if (!s.last) fail('The subproof must end in a line of its own, not in another subproof.');
+  return s;
+}
+const NOSUB = 'This rule needs a subproof. Open one with "Assume", work inside it and press the rule when you reach what you are after.';
+
+const RULES = {
+  'R': {
+    name: 'Reiteration', desc: 'Repeats an available line.', use: 'Select 1 line.',
+    fn: c => { const l = one(c, 'Select the line you want to repeat.'); return [{ f: l.f, cites: '' + l.n }]; }
+  },
+  '∧I': {
+    name: 'Conjunction introduction', desc: 'From A and B, conclude A∧B.', use: 'Select 2 lines.',
+    fn: c => {
+      if (c.L.length < 1 || c.L.length > 2) fail('Select the two lines you want to join with ∧.');
+      const a = c.L[0], b = c.L[1] || a;
+      return [{ f: And(a.f, b.f), cites: a.n + ', ' + b.n }, { f: And(b.f, a.f), cites: b.n + ', ' + a.n }];
+    }
+  },
+  '∧E': {
+    name: 'Conjunction elimination', desc: 'From A∧B, conclude A (or B).', use: 'Select 1 line with a conjunction.',
+    fn: c => {
+      const l = one(c, 'Select a line with a conjunction A∧B.');
+      if (l.f.t !== 'and') fail('Line ' + l.n + ' is not a conjunction: its main connective is not ∧.');
+      return [{ f: l.f.a, cites: '' + l.n }, { f: l.f.b, cites: '' + l.n }];
+    }
+  },
+  '∨I': {
+    name: 'Disjunction introduction', desc: 'From A, conclude A∨B (or B∨A) for any B.', use: 'Select 1 line and choose the other formula.',
+    fn: c => {
+      const l = one(c, 'Select the line that will be one side of the disjunction.');
+      if (!c.P) return { need: 'Which formula goes on the other side of ∨?', kind: 'or' };
+      return [{ f: Or(l.f, c.P), cites: '' + l.n }, { f: Or(c.P, l.f), cites: '' + l.n }];
+    }
+  },
+  '∨E': {
+    name: 'Disjunction elimination', desc: 'From A∨B, a subproof from A to C and another from B to C, conclude C.',
+    use: 'Make one subproof per case and press the rule.', subs: 2,
+    noSub: 'For ∨E you need two subproofs: one assuming the first side of the disjunction and one assuming the second, and both must reach the same formula.',
+    fn: c => {
+      if (c.L.length > 1) fail('Select only the line with the disjunction; the two subproofs are found automatically.');
+      if (c.L.length === 1 && c.L[0].f.t !== 'or') fail('Line ' + c.L[0].n + ' is not a disjunction A∨B.');
+      const ds = c.L.length ? c.L : c.avail().filter(l => l.f.t === 'or');
+      if (!ds.length) fail('There is no disjunction A∨B available to reason by cases.');
+      const out = [];
+      for (const d of ds) for (const s1 of c.subs) for (const s2 of c.subs) {
+        if (s1 === s2 || s1.kind !== 'hyp' || s2.kind !== 'hyp' || !s1.last || !s2.last) continue;
+        if (c.close && !s1.open && !s2.open) continue;
+        if (eq(s1.hyp, d.f.a) && eq(s2.hyp, d.f.b) && eq(s1.last, s2.last))
+          out.push({ f: s1.last, cites: d.n + ', ' + s1.ref + ', ' + s2.ref });
+      }
+      if (!out.length) fail(RULES['∨E'].noSub);
+      return out;
+    }
+  },
+  '→I': { noLines: true,
+    name: 'Conditional introduction', desc: 'From a subproof that assumes A and reaches B, conclude A→B.',
+    use: 'Press the rule inside the subproof.', subs: 1,
+    fn: c => { const s = hypSub(c); return [{ f: Imp(s.hyp, s.last), cites: s.ref }]; }
+  },
+  '→E': {
+    name: 'Conditional elimination (modus ponens)', desc: 'From A→B and A, conclude B.', use: 'Select 2 lines.',
+    fn: c => {
+      const [x, y] = two(c, 'Select two lines: a conditional A→B and its antecedent A.');
+      const out = [];
+      for (const [p, q] of [[x, y], [y, x]])
+        if (p.f.t === 'imp' && eq(p.f.a, q.f)) out.push({ f: p.f.b, cites: p.n + ', ' + q.n });
+      if (!out.length) {
+        if (x.f.t !== 'imp' && y.f.t !== 'imp') fail('Neither of the two lines is a conditional A→B.');
+        fail('The other line has to be exactly the antecedent of the conditional.');
+      }
+      return out;
+    }
+  },
+  '¬I': { noLines: true,
+    name: 'Negation introduction (reductio ad absurdum)', desc: 'From a subproof that assumes A and reaches ⊥, conclude ¬A.',
+    use: 'Press the rule when the subproof reaches ⊥.', subs: 1,
+    fn: c => {
+      const s = hypSub(c);
+      if (s.last.t !== 'bot') fail('For ¬I the subproof must end in ⊥. Find a formula and its negation and apply ¬E.');
+      return [{ f: Not(s.hyp), cites: s.ref }];
+    }
+  },
+  '¬E': {
+    name: 'Negation elimination', desc: 'From A and ¬A, conclude ⊥.', use: 'Select 2 lines.',
+    fn: c => {
+      const [x, y] = two(c, 'Select two lines: a formula A and its negation ¬A.');
+      for (const [p, q] of [[x, y], [y, x]])
+        if (q.f.t === 'not' && eq(q.f.a, p.f)) return [{ f: Bot, cites: p.n + ', ' + q.n }];
+      fail('Those two lines do not contradict each other: one must be exactly the negation of the other.');
+    }
+  },
+  '⊥E': {
+    name: 'Ex falso quodlibet (explosion)', desc: 'From ⊥, conclude any formula.', use: 'Select the line with ⊥ and choose the formula.',
+    fn: c => {
+      const l = one(c, 'Select the line with ⊥.');
+      if (l.f.t !== 'bot') fail('Line ' + l.n + ' is not ⊥.');
+      if (!c.P) return { need: 'Which formula do you want to get from the absurdity?', kind: 'bot' };
+      return [{ f: c.P, cites: '' + l.n }];
+    }
+  },
+  '¬¬E': {
+    name: 'Double negation elimination', desc: 'From ¬¬A, conclude A.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select a line of the form ¬¬A.');
+      if (l.f.t !== 'not' || l.f.a.t !== 'not') fail('Line ' + l.n + ' does not begin with two negations.');
+      return [{ f: l.f.a.a, cites: '' + l.n }];
+    }
+  },
+  '↔I': { noLines: true,
+    name: 'Biconditional introduction', desc: 'From a subproof from A to B and another from B to A, conclude A↔B.',
+    use: 'Make the two subproofs and press the rule.', subs: 2,
+    noSub: 'For ↔I you need two subproofs: one that assumes A and reaches B, and another that assumes B and reaches A.',
+    fn: c => {
+      const out = [];
+      for (const s1 of c.subs) for (const s2 of c.subs) {
+        if (s1 === s2 || s1.kind !== 'hyp' || s2.kind !== 'hyp' || !s1.last || !s2.last) continue;
+        if (c.close && !s1.open && !s2.open) continue;
+        if (eq(s1.hyp, s2.last) && eq(s2.hyp, s1.last)) out.push({ f: Iff(s1.hyp, s2.hyp), cites: s1.ref + ', ' + s2.ref });
+      }
+      if (!out.length) fail(RULES['↔I'].noSub);
+      return out;
+    }
+  },
+  '↔E': {
+    name: 'Biconditional elimination', desc: 'From A↔B and one of its sides, conclude the other.', use: 'Select 2 lines.',
+    fn: c => {
+      const [x, y] = two(c, 'Select two lines: a biconditional A↔B and one of its sides.');
+      const out = [];
+      for (const [p, q] of [[x, y], [y, x]]) if (p.f.t === 'iff') {
+        if (eq(p.f.a, q.f)) out.push({ f: p.f.b, cites: p.n + ', ' + q.n });
+        if (eq(p.f.b, q.f)) out.push({ f: p.f.a, cites: p.n + ', ' + q.n });
+      }
+      if (!out.length) fail('You need a biconditional A↔B and a line that is exactly one of its sides.');
+      return out;
+    }
+  },
+  '∀I': {
+    name: 'Universal introduction', desc: 'From A(c), conclude ∀xA(x), if c appears in no premise and in no open assumption.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select the line you want to generalize.');
+      const ns = [...names(l.f)];
+      if (!ns.length) fail('Line ' + l.n + ' mentions no name to generalize on.');
+      const blocked = new Set();
+      c.hyps.forEach(h => names(h, blocked));
+      const ok = ns.filter(n => !blocked.has(n));
+      if (!ok.length) fail('You cannot generalize on "' + ns.join(', ') + '": it appears in a premise or in an open assumption, so it is not an arbitrary individual.');
+      const used = varsOf(l.f), out = [];
+      for (const v of [...VARS].filter(x => !used.has(x)).slice(0, 3))
+        for (const n of ok) out.push({ f: Qf('all', v, replName(l.f, n, v, -1)), cites: '' + l.n });
+      return out;
+    }
+  },
+  '∀E': {
+    name: 'Universal elimination', desc: 'From ∀xA(x), conclude A(c) for any name c you like.', use: 'Select 1 line and choose the name.',
+    fn: c => {
+      const l = one(c, 'Select a line that begins with ∀.');
+      if (l.f.t !== 'all') fail('Line ' + l.n + ' is not a universal: its main symbol is not ∀.');
+      const ts = namesInPlay(c.st, c.goal);
+      ts.push(freshName(c.st, c.goal));
+      return ts.map(t => ({ f: subst(l.f.a, l.f.v, t), cites: '' + l.n }));
+    }
+  },
+  '∃I': {
+    name: 'Existential introduction', desc: 'From A(c), conclude ∃xA(x).', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select the line that gives the example.');
+      const ns = [...names(l.f)];
+      if (!ns.length) fail('Line ' + l.n + ' mentions no individual (a, b, c…) to serve as an example.');
+      const used = varsOf(l.f), out = [];
+      for (const v of [...VARS].filter(x => !used.has(x)).slice(0, 3))
+        for (const n of ns) {
+          const k = countName(l.f, n), full = (1 << k) - 1;
+          const masks = [full];
+          if (k <= 3) for (let m = full - 1; m >= 1; m--) masks.push(m);
+          masks.forEach(m => out.push({ f: Qf('ex', v, replName(l.f, n, v, m)), cites: '' + l.n }));
+        }
+      return out;
+    }
+  },
+  '∃E': {
+    name: 'Existential elimination', desc: 'From ∃xA(x) and a subproof that assumes A(c), with c new, and reaches B without c, conclude B.',
+    use: 'Assume the instance with a new name and press the rule at the end.', subs: 1,
+    fn: c => {
+      const s = hypSub(c);
+      if (c.L.length > 1) fail('Select only the line with the existential.');
+      if (c.L.length === 1 && c.L[0].f.t !== 'ex') fail('Line ' + c.L[0].n + ' is not an existential: its main symbol is not ∃.');
+      const es = c.L.length ? c.L : c.avail().filter(l => l.f.t === 'ex');
+      if (!es.length) fail('There is no existential ∃x… available.');
+      const out = [];
+      let why = null;
+      for (const e of es) {
+        const n = instName(e.f, s.hyp);
+        if (n === false) { why = why || 'The assumption of the subproof must be an instance of the existential: the same formula with a new name in place of the variable.'; continue; }
+        if (n) {
+          if (names(e.f).has(n)) { why = 'The name "' + n + '" already appears in the existential. Use a new name.'; continue; }
+          if (names(s.last).has(n)) { why = 'The last line of the subproof still mentions "' + n + '". It has to hold without depending on that name.'; continue; }
+          if (c.hyps.some(h => names(h).has(n))) { why = 'The name "' + n + '" is not new: it appears in a premise or in an open assumption.'; continue; }
+        }
+        out.push({ f: s.last, cites: e.n + ', ' + s.ref });
+      }
+      if (!out.length) fail(why);
+      return out;
+    }
+  },
+  '□I': { noLines: true,
+    name: 'Necessity introduction', desc: 'From a strict subproof that reaches A, conclude □A.',
+    use: 'Press the rule inside the strict subproof.', subs: 1,
+    noSub: '□I closes a strict subproof. Open one with "□ Strict", reach the formula you want and press □I.',
+    fn: c => {
+      const s = c.subs[0];
+      if (s.kind !== 'strict') fail('□I closes a strict subproof (the kind that begins with □). This subproof has an assumption: it is closed with →I or ¬I.');
+      if (!s.last) fail('The strict subproof does not have a formula of its own yet.');
+      return [{ f: Box(s.last), cites: s.ref }];
+    }
+  },
+  '□E': {
+    name: 'Necessity elimination', desc: 'Inside a strict subproof: from □A (outside), write A.', use: 'Select a line □A from outside.', cross: 1,
+    fn: c => {
+      const l = one(c, 'Select a line □A that is outside the strict subproof.');
+      if (l.f.t !== 'box') fail('Line ' + l.n + ' does not begin with □.');
+      return [{ f: l.f.a, cites: '' + l.n }];
+    }
+  },
+  'RT': {
+    name: 'Rule T (reflexivity)', desc: 'From □A, conclude A in the same world.', use: 'Select 1 line □A.',
+    fn: c => {
+      const l = one(c, 'Select a line □A.');
+      if (l.f.t !== 'box') fail('Line ' + l.n + ' does not begin with □.');
+      return [{ f: l.f.a, cites: '' + l.n }];
+    }
+  },
+  'R4': {
+    name: 'Rule 4 (transitivity)', desc: 'Inside a strict subproof: copy □A (from outside) as it is.', use: 'Select a line □A from outside.', cross: 1,
+    fn: c => {
+      const l = one(c, 'Select a line □A that is outside the strict subproof.');
+      if (l.f.t !== 'box') fail('R4 only lets in formulas that begin with □.');
+      return [{ f: l.f, cites: '' + l.n }];
+    }
+  },
+  'R5': {
+    name: 'Rule 5 (Euclidean)', desc: 'Inside a strict subproof: copy ¬□A or ◇A (from outside) as it is.', use: 'Select a line ¬□A or ◇A from outside.', cross: 1,
+    fn: c => {
+      const l = one(c, 'Select a line ¬□A or ◇A that is outside the strict subproof.');
+      if (!(l.f.t === 'dia' || (l.f.t === 'not' && l.f.a.t === 'box'))) fail('R5 only lets in formulas of the form ¬□A or ◇A.');
+      return [{ f: l.f, cites: '' + l.n }];
+    }
+  },
+  'Def◇': {
+    name: 'Definition of possibility', desc: '◇A and ¬□¬A are interchangeable.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select a line ◇A or ¬□¬A.'), f = l.f;
+      if (f.t === 'dia') return [{ f: Not(Box(Not(f.a))), cites: '' + l.n }];
+      if (f.t === 'not' && f.a.t === 'box' && f.a.a.t === 'not') return [{ f: Dia(f.a.a.a), cites: '' + l.n }];
+      fail('Def◇ applies to ◇A or to ¬□¬A.');
+    }
+  },
+  'MC': {
+    name: 'Modal conversion', desc: '¬□A is equivalent to ◇¬A; ¬◇A is equivalent to □¬A.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select a line ¬□A, ◇¬A, ¬◇A or □¬A.'), f = l.f, out = [];
+      if (f.t === 'not' && f.a.t === 'box') out.push(Dia(Not(f.a.a)));
+      if (f.t === 'dia' && f.a.t === 'not') out.push(Not(Box(f.a.a)));
+      if (f.t === 'not' && f.a.t === 'dia') out.push(Box(Not(f.a.a)));
+      if (f.t === 'box' && f.a.t === 'not') out.push(Not(Dia(f.a.a)));
+      if (!out.length) fail('MC applies to ¬□A, ◇¬A, ¬◇A or □¬A.');
+      return out.map(g => ({ f: g, cites: '' + l.n }));
+    }
+  },
+  'DN': {
+    name: 'Double negation', desc: 'A and ¬¬A are interchangeable.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select a line.'), out = [];
+      if (l.f.t === 'not' && l.f.a.t === 'not') out.push({ f: l.f.a.a, cites: '' + l.n });
+      out.push({ f: Not(Not(l.f)), cites: '' + l.n });
+      return out;
+    }
+  },
+  'DeM': {
+    name: 'De Morgan laws', desc: '¬(A∧B) is equivalent to ¬A∨¬B; ¬(A∨B) is equivalent to ¬A∧¬B.', use: 'Select 1 line.',
+    fn: c => {
+      const l = one(c, 'Select a line.'), f = l.f, out = [];
+      if (f.t === 'not' && f.a.t === 'and') out.push(Or(Not(f.a.a), Not(f.a.b)));
+      if (f.t === 'not' && f.a.t === 'or') out.push(And(Not(f.a.a), Not(f.a.b)));
+      if (f.t === 'or' && f.a.t === 'not' && f.b.t === 'not') out.push(Not(And(f.a.a, f.b.a)));
+      if (f.t === 'and' && f.a.t === 'not' && f.b.t === 'not') out.push(Not(Or(f.a.a, f.b.a)));
+      if (!out.length) fail('DeM applies to ¬(A∧B), ¬(A∨B), ¬A∨¬B or ¬A∧¬B.');
+      return out.map(g => ({ f: g, cites: '' + l.n }));
+    }
+  },
+  'LEM': {
+    name: 'Excluded middle', desc: 'Write A∨¬A for any formula A.', use: 'Press the rule and choose A.',
+    fn: c => {
+      if (!c.P) return { need: 'For which formula A do you want to write A∨¬A?', kind: 'lem' };
+      return [{ f: Or(c.P, Not(c.P)), cites: '' }];
+    }
+  }
+};
+const ORDER = ['R', '∧I', '∧E', '∨I', '∨E', '→I', '→E', '¬I', '¬E', '⊥E', '¬¬E', '↔I', '↔E',
+  '∀I', '∀E', '∃I', '∃E', '□I', '□E', 'RT', 'R4', 'R5', 'Def◇', 'MC', 'DN', 'DeM', 'LEM'];
+
+/* Aplica una regla. sel: nº de línea (>0) o -nº de la primera línea de una subprueba cerrada.
+   Devuelve {ok, st} | {error} | {need:'formula', prompt, kind, A} | {need:'choice', options}. */
+function apply(st, rid, sel, extra, goal) {
+  extra = extra || {};
+  const rule = RULES[rid];
+  const selL = rule.noLines ? [] : sel.filter(x => x > 0);
+  const selS = sel.filter(x => x < 0).map(x => subAt(st, -x)).filter(Boolean);
+  const nS = rule.subs || 0;
+  const attempts = [];
+  if (!nS) attempts.push({ base: st.open, close: false, pool: [] });
+  else {
+    const closedAcc = base => Object.values(st.subs)
+      .filter(sp => sp.end != null && subK(st, sp, base) === 0).sort((a, b) => b.start - a.start);
+    if (selS.length >= nS) attempts.push({ base: st.open, close: false, pool: selS });
+    else {
+      if (st.open.length) {
+        const base = st.open.slice(0, -1);
+        const openSp = st.subs[st.open[st.open.length - 1]];
+        attempts.push({ base, close: true, pool: [openSp, ...selS, ...(nS > 1 && !selS.length ? closedAcc(base) : [])] });
+      }
+      const ca = closedAcc(st.open);
+      const rest = nS === 1 ? ca.filter(sp => sp.end === st.lines.length - 1) : ca;
+      attempts.push({ base: st.open, close: false, pool: selS.length ? [...selS, ...(nS > 1 ? ca.filter(s => !selS.includes(s)) : [])] : rest });
+    }
+  }
+  const rel = relSet(st, goal);
+  let firstErr = null;
+  for (const at of attempts) {
+    try {
+      const L = selL.map(n => {
+        const k = lineK(st, n - 1, at.base);
+        if (k < 0) fail('Line ' + n + ' cannot be cited from there: it is inside the subproof being closed.');
+        return { n, f: st.lines[n - 1].f, k };
+      });
+      const cross = rule.cross || 0;
+      for (const l of L) {
+        if (l.k === cross) continue;
+        if (!cross) fail('Line ' + l.n + ' is outside the strict subproof: it belongs to another world. It can only come in with □E (or with R4 and R5 if the system has them).');
+        if (l.k === 0) fail(rid + ' is for bringing in a formula from outside a strict subproof. Line ' + l.n + ' is already in the same world.');
+        fail('Line ' + l.n + ' is more than one strict subproof away.');
+      }
+      at.pool.forEach(sp => { if (sp.end != null && subK(st, sp, at.base) !== 0) fail('That subproof cannot be cited from here.'); });
+      if (at.pool.length < nS) fail(rule.noSub || NOSUB);
+      const ctx = {
+        st, goal, L, close: at.close, P: extra.f || null,
+        subs: at.pool.map(sp => subInfo(st, sp)),
+        hyps: openHyps(st, at.base),
+        avail: () => st.lines.map((l, i) => ({ n: i + 1, f: l.f, k: lineK(st, i, at.base) })).filter(l => l.k === 0)
+      };
+      const res = rule.fn(ctx);
+      if (res.need) return { need: 'formula', prompt: res.need, kind: res.kind, A: L[0] ? L[0].f : null };
+      const seen = new Set();
+      let cands = res.filter(c => { const k = str(c.f); if (seen.has(k)) return false; seen.add(k); return true; });
+      cands.sort((a, b) => (rel.has(str(b.f)) ? 1 : 0) - (rel.has(str(a.f)) ? 1 : 0));
+      let pick = null;
+      if (extra.out != null) {
+        pick = cands.find(c => str(c.f) === extra.out);
+        if (!pick) fail('That result cannot be obtained with ' + rid + '.');
+      } else if (cands.length === 1) pick = cands[0];
+      else return { need: 'choice', options: cands.slice(0, 12).map(c => c.f) };
+      const ns = clone(st);
+      if (at.close) { const id = ns.open.pop(); ns.subs[id].end = ns.lines.length - 1; }
+      ns.lines.push({ f: pick.f, kind: 'step', rule: rid, cites: pick.cites, path: ns.open.slice() });
+      return { ok: true, st: ns };
+    } catch (e) {
+      if (!(e instanceof LErr)) throw e;
+      firstErr = firstErr || e.message;
+    }
+  }
+  return { error: firstErr };
+}
+
+/* paso de una solución: ['H', f] supuesto · ['S'] estricta · ['C'] cerrar · [regla, sel, salida, fórmula] */
+function step(st, s, goal) {
+  const op = s[0];
+  if (op === 'H') return addHyp(st, parse(s[1]));
+  if (op === 'S') return addStrict(st);
+  if (op === 'C') return closeSub(st);
+  const r = apply(st, op, s[1] || [], { out: s[2], f: s[3] ? parse(s[3]) : null }, goal);
+  if (r.ok) return r.st;
+  fail(r.error || 'Ambiguous step (' + op + '): missing ' + r.need);
+}
+
+/* sugerencias para los cuadros de fórmula */
+function suggest(kind, st, goal, A) {
+  const out = [], seen = new Set();
+  const push = f => { const k = str(f); if (closed(f) && !seen.has(k)) { seen.add(k); out.push(f); } };
+  const acc = st.lines.filter((l, i) => lineK(st, i, st.open) === 0).map(l => l.f);
+  const all = [];
+  if (goal) subformulas(goal, all);
+  st.lines.forEach(l => { if (l.f) subformulas(l.f, all); });
+  const bySize = all.slice().sort((a, b) => size(a) - size(b));
+  if (kind === 'hyp') {
+    const fr = freshName(st, goal);
+    acc.forEach(f => { if (f.t === 'ex') push(subst(f.a, f.v, fr)); });
+    acc.forEach(f => { if (f.t === 'or') { push(f.a); push(f.b); } });
+    all.forEach(g => { if (g.t === 'imp') push(g.a); });
+    all.forEach(g => { if (g.t === 'not') push(g.a); });
+    if (goal && goal.t !== 'bot') push(Not(goal));
+    all.forEach(g => { if (g.t === 'iff') { push(g.a); push(g.b); } });
+    bySize.forEach(g => { if (g.t !== 'bot') push(g); });
+    return out.slice(0, 10);
+  }
+  if (kind === 'or') {
+    all.forEach(g => { if (g.t === 'or') { if (eq(g.a, A)) push(g.b); if (eq(g.b, A)) push(g.a); } });
+    bySize.forEach(g => { if (g.t !== 'bot') push(g); });
+    return out.slice(0, 8);
+  }
+  if (kind === 'bot' && goal) push(goal);
+  bySize.forEach(g => { if (g.t !== 'bot') push(g); });
+  return out.slice(0, 8);
+}
+
+root.Logic = {
+  VARS, NAMES, LErr, RULES, ORDER,
+  parse, str, eq, closed, subformulas, names, freeVars, evalF, atomsOf,
+  newProof, addHyp, addStrict, closeSub, lineK, subK, subAt, pickSub,
+  apply, step, suggest, namesInPlay, freshName,
+  Not, And, Or, Imp
+};
+})(typeof window !== 'undefined' ? window : globalThis);
+
+/* Logic Advance — content (generated from src/content.js and lang/content.en.js) */
+(function (root) { root.CONTENT = {"RS":{"and":["R","∧I","∧E"],"imp":["R","∧I","∧E","→I","→E"],"or":["R","∧I","∧E","→I","→E","∨I","∨E"],"neg":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E"],"cl":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","↔I","↔E"],"fo1":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","∀E","∃I"],"fo2":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","∀E","∃I","∀I"],"fo":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","∀E","∃I","∀I","∃E"],"k":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","□I","□E"],"kd":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","□I","□E","Def◇","MC"],"t":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","□I","□E","Def◇","MC","RT"],"s4":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","□I","□E","Def◇","MC","RT","R4"],"s5":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","□I","□E","Def◇","MC","RT","R4","R5"],"qk":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","∀E","∃I","∀I","∃E","□I","□E","Def◇","MC"],"qt":["R","∧I","∧E","→I","→E","∨I","∨E","¬I","¬E","⊥E","¬¬E","∀E","∃I","∀I","∃E","□I","□E","Def◇","MC","RT"],"int":["R","∧I","∧E","∨I","∨E","→I","→E","¬I","¬E","⊥E"],"intfo":["R","∧I","∧E","∨I","∨E","→I","→E","¬I","¬E","⊥E","∀I","∀E","∃I","∃E"],"lp":["R","∧I","∧E","∨I","∨E","DN","DeM","LEM"]},"worlds":[{"k":0,"name":"Base Camp","logic":"Preliminaries: propositions, truth tables and validity","badge":"P","intro":"Before setting out, check your gear: what a proposition is, how propositions combine, and when an argument is valid.","stages":[{"t":"T","title":"What is a proposition?","pages":[{"say":"Welcome to base camp! I am <b>Minerva</b>. Before building proofs you need to know what material logic works with: <b>propositions</b>."},{"say":"A proposition is what a declarative sentence says: something that can be <b>true or false</b>. Questions, commands and wishes assert nothing, so they do not express propositions.","mood":"neutral","fig":{"k":"table","head":["Sentence","Does it express a proposition?"],"rows":[["\"It is raining in Valdivia\"","Yes"],["\"2 + 2 = 5\"","Yes: it is false, but it is a proposition"],["\"Is it raining?\"","No: it is a question"],["\"Close the door\"","No: it is a command"],["\"If only it would rain\"","No: it is a wish"]]}},{"say":"Classical logic assumes the principle of <b>bivalence</b>: every proposition has exactly one of two truth values, true (T) or false (F). Later on you will visit logics that call this assumption into question."},{"say":"A proposition is <b>atomic</b> if it contains no other proposition as a part: \"it is raining\". It is <b>compound</b> if it is built from others: \"it is raining and it is cold\". We abbreviate atomic propositions with letters: {P}, {Q}, {R}."}]},{"t":"Q","title":"Proposition or not?","qs":[{"q":"Which of these sentences expresses a proposition?","opts":["\"What time is it?\"","\"The Earth goes around the Sun\"","\"Pass me the salt\""],"ok":1,"why":"It is the only one that asserts something that can be true or false. The others are a question and a request."},{"q":"\"The Moon is made of cheese.\" Does it express a proposition?","opts":["No, because it is false","Yes: it is false, but it has a truth value","Only if someone believes it"],"ok":1,"why":"Being a proposition does not require being true. It is enough that it makes sense to ask whether it is."},{"q":"Which of these propositions is atomic?","opts":["\"It is raining and it is cold\"","\"It is not raining\"","\"It is raining\""],"ok":2,"why":"The other two contain the proposition \"it is raining\" as a part, combined with \"and\" or with \"not\"."},{"q":"\"If only I could pass the exam\" is…","opts":["a wish: it does not express a proposition","a true proposition","a false proposition"],"ok":0,"why":"Whoever says it is not asserting that they will pass. There is nothing to evaluate as true or false."}]},{"t":"T","title":"Propositional content","pages":[{"say":"Do not confuse the sentence with the proposition. \"It is raining\", \"Rain is falling\" and \"Llueve\" are three different sentences, but they say the same thing. What they have in common is their <b>propositional content</b>.","mood":"neutral"},{"say":"Content is not the same as the <b>force</b> with which it is used, either. These three sentences share one content, but with one you assert, with another you ask, and with another you give an order.","mood":"neutral","fig":{"k":"table","head":["Sentence","Force","Content"],"rows":[["\"You close the door\"","assertion","that you close the door"],["\"Do you close the door?\"","question","that you close the door"],["\"Close the door!\"","command","that you close the door"]]}},{"say":"The other way round, one and the same sentence can express different propositions depending on who says it and when. \"I am hungry\" says one thing in Ana's mouth and another in Luis's. Logic cares about the content, not the words."},{"say":"So how do we identify a content? By its <b>truth conditions</b>: to know the content of a proposition is to know in which situations it would be true and in which false. Truth tables will make this idea precise."}]},{"t":"Q","title":"The same in other words","qs":[{"q":"Which pair of sentences asserts the same thing?","opts":["\"Ana loves Luis\" and \"Luis loves Ana\"","\"Ana loves Luis\" and \"Luis is loved by Ana\"","\"Ana loves Luis\" and \"Ana does not hate Luis\""],"ok":1,"why":"Active and passive voice change the words, not the content: they are true in exactly the same situations."},{"q":"\"The window is open\" and \"Is the window open?\" share…","opts":["the force, but not the content","the content, but not the force","neither of the two"],"ok":1,"why":"The content is the same: that the window is open. With one you assert it and with the other you ask."},{"q":"Pedro says \"I am Chilean\" and Kenji says \"I am Chilean\". We have…","opts":["the same sentence and the same proposition","the same sentence and two different propositions","two sentences and the same proposition"],"ok":1,"why":"One is about Pedro and the other about Kenji: they can have different truth values, so they are different propositions."}]},{"t":"T","title":"Connectives","pages":[{"say":"Compound propositions are formed with <b>connectives</b>. Those of classical logic are <b>truth-functional</b>: the value of the compound depends only on the values of its parts.","fig":{"k":"table","head":["Connective","Name","Read as","Example"],"rows":[["{¬}","negation","not","{¬P}"],["{∧}","conjunction","and","{P∧Q}"],["{∨}","disjunction","or","{P∨Q}"],["{→}","conditional","if… then","{P→Q}"],["{↔}","biconditional","if and only if","{P↔Q}"]]}},{"say":"To <b>formalize</b> is to go from English to formulas. First you pick a letter for each atomic proposition; then you look for the main connective. \"If it rains and I have no umbrella, I get wet\" becomes {(P∧¬Q)→R}.","fig":{"k":"table","head":["Letter","Proposition"],"rows":[["{P}","it rains"],["{Q}","I have an umbrella"],["{R}","I get wet"]]}},{"say":"Parentheses matter. {P∧(Q∨R)} and {(P∧Q)∨R} do not say the same thing: in the first, {P} has to hold no matter what; in the second, {R} alone is enough."},{"say":"Some translation tips. In {P→Q}, {P} is the <b>antecedent</b> and {Q} the <b>consequent</b>.","fig":{"k":"table","head":["In English","Formula"],"rows":[["P but Q","{P∧Q}"],["neither P nor Q","{¬P∧¬Q}"],["P if Q","{Q→P}"],["P only if Q","{P→Q}"],["P unless Q","{¬Q→P}"]]}}]},{"t":"Q","title":"Formalizing","qs":[{"q":"Let {P} be \"it is raining\" and {Q} be \"it is cold\". How do you formalize \"It is raining but it is not cold\"?","opts":["{P∧¬Q}","{¬(P∧Q)}","{P∨¬Q}"],"ok":0,"why":"\"But\" is a conjunction. The negation affects only \"it is cold\"."},{"q":"Add {R}: \"I go out\". \"If it is raining or it is cold, I do not go out\" is…","opts":["{P∨(Q→¬R)}","{(P∨Q)→¬R}","{(P∧Q)→¬R}"],"ok":1,"why":"The main connective is the conditional: the whole of \"it is raining or it is cold\" is the antecedent."},{"q":"\"I go out only if it is not raining\" is…","opts":["{¬P→R}","{R→¬P}","{R↔¬P}"],"ok":1,"why":"\"Only if\" introduces a necessary condition: if I go out, then it is not raining. It does not say that I go out whenever it is not raining."},{"q":"\"It is neither raining nor cold\" is…","opts":["{¬P∧¬Q}","{¬(P∧Q)}","{¬P∨¬Q}"],"ok":0,"why":"It denies both. {¬(P∧Q)} only says that they do not both hold."}]},{"t":"T","title":"Truth tables","pages":[{"say":"A <b>valuation</b> assigns T or F to each letter. The truth table of a connective says what value the compound has in each case. Negation flips the value.","fig":[{"k":"table","head":["{A}","{¬A}"],"rows":[["T","F"],["F","T"]]},{"k":"table","head":["{A}","{B}","{A∧B}","{A∨B}","{A→B}","{A↔B}"],"rows":[["T","T","T","T","T","T"],["T","F","F","T","F","F"],["F","T","F","T","T","F"],["F","F","F","F","T","T"]]}]},{"say":"Three things worth remembering. A conjunction is true only if both parts are. Disjunction is <b>inclusive</b>: it is false only if both parts are false. And a conditional is false only when the antecedent is true and the consequent false."},{"say":"For a compound formula you make one row per valuation: with two letters that is 4 rows, with three it is 8. You compute from the inside out: first the parts, and the main connective last.","fig":{"k":"table","head":["{P}","{Q}","{¬P}","{¬P∨Q}"],"rows":[["T","T","F","T"],["T","F","F","F"],["F","T","T","T"],["F","F","T","T"]]}},{"say":"In the table challenges, tap each cell to set T and tap it again to switch it to F. When you have filled in every column, press <b>Check</b>."}]},{"t":"TT","title":"Your first table","cols":["P∧Q","¬(P∧Q)"],"intro":"Fill in the column for {P∧Q} first and use it to compute {¬(P∧Q)}.","outro":"Negation flips the column: {¬(P∧Q)} is false only when {P} and {Q} are both true."},{"t":"TT","title":"The conditional and its contrapositive","cols":["P→Q","¬Q→¬P"],"intro":"Compute the two columns carefully and compare them when you finish.","outro":"The two columns are identical: {P→Q} and {¬Q→¬P} are equivalent. They say the same thing in other words."},{"t":"TT","title":"Three letters, eight rows","cols":["Q∨R","P∧(Q∨R)"],"intro":"With three letters there are eight valuations. Go step by step: {Q∨R} first.","outro":"{P∧(Q∨R)} is true in three of the eight rows: you need {P} and at least one of the other two."},{"t":"T","title":"Content, equivalence and tautologies","pages":[{"say":"Look at the final column of a table. If it is all T, the formula is a <b>tautology</b>: it is true whatever happens. If it is all F, it is a <b>contradiction</b>. If it has both, it is a <b>contingency</b>.","mood":"neutral","fig":{"k":"table","head":["{P}","{P∨¬P}","{P∧¬P}"],"rows":[["T","T","F"],["F","T","F"]]}},{"say":"Now we can say precisely what content is: it is the truth conditions, that is, the column of the table. Two formulas with the same column are <b>logically equivalent</b>: they have the same content, said in two ways. You already saw this with {P→Q} and {¬Q→¬P}.","mood":"neutral"},{"say":"The more situations a proposition rules out, the more it says. {P∧Q} says more than {P}, because it discards more rows. A tautology discards none: it tells you nothing. A contradiction discards them all: it cannot be true."}]},{"t":"TT","title":"Always true","cols":["P∧Q","(P∧Q)→P"],"intro":"Compute the table of {(P∧Q)→P} and look at its column.","outro":"All T: it is a tautology. It cannot be false because, if {P∧Q} is true, so is {P}."},{"t":"Q","title":"Classify","qs":[{"q":"{P∧¬P} is a…","opts":["tautology","contradiction","contingency"],"ok":1,"why":"Whatever the value of {P}, one of the two parts is false, so the conjunction always is."},{"q":"{P→P} is a…","opts":["tautology","contradiction","contingency"],"ok":0,"why":"A conditional is false only with a true antecedent and a false consequent, and here they are the same proposition."},{"q":"Which one has the same content as {¬(P∧Q)}?","opts":["{¬P∧¬Q}","{¬P∨¬Q}","{P∨Q}"],"ok":1,"why":"To deny that both hold is to say that at least one fails. It is one of De Morgan's laws; you can check it with a table."},{"q":"Which of these says the most, that is, rules out the most situations?","opts":["{P∨Q}","{P}","{P∧Q}"],"ok":2,"why":"{P∧Q} is true in only one row out of four. {P} is true in two and {P∨Q} in three."}]},{"t":"T","title":"Consistency","pages":[{"say":"A set of propositions is <b>consistent</b> if they can all be true together: at least one valuation makes every one of them true. If there is none, it is <b>inconsistent</b>.","mood":"neutral"},{"say":"In a joint table you look for a row where all of them are T. Here there is none: {P}, {P→Q} and {¬Q} form an inconsistent set.","fig":{"k":"table","head":["{P}","{Q}","{P→Q}","{¬Q}","All three T?"],"rows":[["T","T","T","F","no"],["T","F","F","T","no"],["F","T","T","F","no"],["F","F","T","T","no"]]}},{"say":"Consistent does not mean true. It only means that the propositions do not get in each other's way: \"it is raining\" and \"it is cold\" are consistent even if today is sunny. A contradiction, by contrast, is inconsistent all by itself."},{"say":"In the next two challenges you have to show that a set is consistent: find a valuation that makes all of its propositions true."}]},{"t":"M","title":"Three that get along","logic":"CL","prem":["P∨Q","¬P","Q→R"],"goal":null,"mode":"sat","intro":"Find a valuation that makes the three propositions true at once.","outro":"With {P} false and {Q} and {R} true, all three are true. A single valuation is enough for the set to be consistent."},{"t":"M","title":"With a little skill","logic":"CL","prem":["P→Q","¬Q","P∨R"],"goal":null,"mode":"sat","intro":"This set leaves less room. Start with the proposition that can be true in only one way.","outro":"{¬Q} forces {Q} to be false; then {P→Q} forces {P} to be false, and {P∨R} forces {R} to be true."},{"t":"Q","title":"Consistent or not?","qs":[{"q":"Is the set formed by {P}, {P→Q} and {¬Q} consistent?","opts":["Yes","No"],"ok":1,"why":"If {P} and {P→Q} are true, {Q} has to be, and then {¬Q} is false."},{"q":"And the one formed by {P→Q} and {¬P}?","opts":["Yes","No"],"ok":0,"why":"With {P} false both are true, whatever the value of {Q}."},{"q":"And the one formed by {P∨Q}, {¬P} and {¬Q}?","opts":["Yes","No"],"ok":1,"why":"The two negations require {P} and {Q} to be false, and then {P∨Q} is false."},{"q":"If a set is consistent, are all its propositions true?","opts":["Yes, always","No: they only can be, together","It depends on how many there are"],"ok":1,"why":"Consistency is about joint possibility, not about actual truth."}]},{"t":"T","title":"Validity","pages":[{"say":"An <b>argument</b> has premises and a conclusion. It is <b>valid</b> when it is impossible for the premises to be true and the conclusion false: no valuation manages that. In the game you will see it written like this: {P→Q, P ⊢ Q}.","mood":"neutral"},{"say":"With a table: mark the rows where all the premises are T and look at the conclusion in those rows. In this argument there is only one, the first, and in it the conclusion is T. It is valid.","fig":{"k":"table","head":["{P}","{Q}","Premise {P→Q}","Premise {P}","Conclusion {Q}"],"rows":[["T","T","T","T","T"],["T","F","F","T","F"],["F","T","T","F","T"],["F","F","T","F","F"]]}},{"say":"Valid does not mean that the premises are true. \"If the Moon is made of cheese, it is edible; the Moon is made of cheese; so it is edible\" is valid. Validity depends on form. A valid argument with true premises is called <b>sound</b>."},{"say":"Validity and consistency are two sides of the same coin: an argument is valid exactly when its premises, together with the <b>negation</b> of the conclusion, form an inconsistent set. A <b>counterexample</b> is a valuation that shows the opposite.","mood":"neutral"},{"say":"Tables always work, but they grow very fast: with ten letters you already have 1024 rows. In World 1 you will learn another method, <b>proofs</b>, which reaches the conclusion step by step.","mood":"neutral"}]},{"t":"TT","title":"Modus tollens in a table","cols":["P→Q","¬Q","¬P"],"intro":"The first two columns are the premises and the third is the conclusion. Fill them in and look for the rows with true premises.","outro":"Only in the last row are both premises true, and there the conclusion is true as well. The argument {P→Q, ¬Q ⊢ ¬P} is valid."},{"t":"M","title":"Denying the antecedent","logic":"CL","prem":["P→Q","¬P"],"goal":"¬Q","intro":"This argument looks reasonable and is not. Find the counterexample: true premises and a false conclusion.","outro":"With {P} false and {Q} true, the premises are true and the conclusion false. \"Denying the antecedent\" is a fallacy."},{"t":"Q","title":"Validity","qs":[{"q":"A valid argument has a false conclusion. What follows?","opts":["That is impossible","At least one premise is false","It was actually invalid"],"ok":1,"why":"If all the premises were true, the conclusion would have to be true. Since it is not, some premise fails."},{"q":"Is {P→Q, Q→R ⊢ P→R} valid?","opts":["Yes","No"],"ok":0,"why":"For the conclusion to be false you would need {P} true and {R} false, and then some premise would be false."},{"q":"An argument is valid exactly when its premises form an inconsistent set together with…","opts":["the conclusion","the negation of the conclusion","a tautology"],"ok":1,"why":"To say that true premises and a false conclusion cannot occur together is to say that the premises and the negation of the conclusion cannot all be true."},{"q":"Can a valid argument have false premises and a true conclusion?","opts":["Yes","No"],"ok":0,"why":"\"All fish fly; eagles are fish; so eagles fly.\" Validity only forbids true premises with a false conclusion."}]}]},{"k":1,"name":"Propositional Prairie","logic":"Classical propositional logic","badge":"∧","intro":"This is where you learn the trade: the rules of each connective and how a Fitch proof is put together.","stages":[{"t":"T","title":"What is a proof?","pages":[{"say":"Hello! I am <b>Minerva</b>. We are going to travel through six worlds, and in each one you will learn a different logic. We start with the best known: classical propositional logic."},{"say":"An argument is <b>valid</b> when the conclusion follows from the premises by form alone. To study form we use letters ({P}, {Q}, {R}) instead of sentences, and connectives to combine them.","fig":{"k":"table","head":["Symbol","Read as","Example"],"rows":[["{¬}","not","{¬P}"],["{∧}","and","{P∧Q}"],["{∨}","or","{P∨Q}"],["{→}","if… then","{P→Q}"],["{↔}","if and only if","{P↔Q}"],["{⊥}","absurdity","{⊥}"]]}},{"say":"A <b>Fitch</b>-style proof is a numbered list. The premises go at the top, above the bar. Each new line carries its justification on the right: the rule used and the lines it cites.","fig":{"k":"fitch","rows":[[1,0,"P∧Q","Premise","p"],[2,0,"P","∧E 1"],[3,0,"P∨R","∨I 2"]]}},{"say":"Each connective has two rules. The <b>introduction</b> rule (I) says how to arrive at a formula with that connective. The <b>elimination</b> rule (E) says what you can get out of one."},{"say":"This is how you play: tap the lines you want to use and then press a rule. The rules that work for your selection light up. You win when the conclusion appears in the main column of the proof."}]},{"t":"T","title":"Conjunction","pages":[{"say":"To assert {A∧B} you need to have {A} and to have {B}. That is the rule <b>∧I</b>: select the two lines and press {∧I}.","fig":{"k":"fitch","rows":[["m",0,"A",""],["n",0,"B",""],["",0,"A∧B","∧I m, n"]]}},{"say":"Conversely, if you have {A∧B} you can keep either of the two parts. That is the rule <b>∧E</b>. The game will ask you which one you want.","fig":{"k":"fitch","rows":[["m",0,"A∧B",""],["",0,"A","∧E m"],["",0,"B","∧E m"]]}},{"say":"In the schemas, {A} and {B} stand for any formulas, not just letters. The rule {∧E} applies just the same to {(P→Q)∧¬R}. Now it is your turn."}]},{"t":"P","title":"Turn it around","prem":["P","Q"],"goal":"Q∧P","rules":"and","intro":"Join the two premises with {∧I}. Mind the order the conclusion asks for.","hints":["Select lines 1 and 2 and press {∧I}.","Of the two options, choose {Q∧P}."],"sol":[["∧I",[2,1],"Q∧P"]]},{"t":"P","title":"Take apart, put together","prem":["P∧(Q∧R)"],"goal":"R∧P","rules":"and","intro":"First take the premise apart with {∧E}; then put the conclusion together with {∧I}.","hints":["Use {∧E} on line 1 twice: once to get {P} and once to get {Q∧R}.","Get {R} out of {Q∧R} with another {∧E}.","Select {R} and {P} and press {∧I}."],"sol":[["∧E",[1],"P"],["∧E",[1],"Q∧R"],["∧E",[3],"R"],["∧I",[4,2],"R∧P"]]},{"t":"T","title":"The conditional and subproofs","pages":[{"say":"{A→B} says that if {A} holds, {B} holds. Its elimination rule is the famous <b>modus ponens</b>: from {A→B} and {A} you get {B}.","fig":{"k":"fitch","rows":[["m",0,"A→B",""],["n",0,"A",""],["",0,"B","→E m, n"]]}},{"say":"And how do you prove a conditional? With a <b>subproof</b>: you assume {A} for a moment and work until you reach {B}. Then you close the subproof and conclude {A→B}.","fig":{"k":"fitch","rows":[["i",1,"A","Assumption","h"],["",1,"⋮",""],["j",1,"B",""],["",0,"A→B","→I i–j"]]}},{"say":"The assumption holds only inside its subproof. When it is closed, its lines are no longer available: what you proved there depended on assuming {A}."},{"say":"In the game: press <b>Assume</b> and choose the formula. Work inside. When you have the consequent, press {→I} and the subproof closes by itself. The rule <b>R</b> (reiteration) repeats an available line."}]},{"t":"P","title":"Modus ponens in a chain","prem":["P→Q","Q→R","P"],"goal":"R","rules":"imp","intro":"Two steps of {→E} in a row.","hints":["Select lines 1 and 3 and press {→E} to get {Q}.","Now combine {Q→R} with the {Q} you just obtained."],"sol":[["→E",[1,3]],["→E",[2,4]]]},{"t":"P","title":"Hypothetical syllogism","prem":["P→Q","Q→R"],"goal":"P→R","rules":"imp","intro":"The conclusion is a conditional. To prove it, assume its antecedent.","hints":["Press <b>Assume</b> and choose {P}.","Inside the subproof, use {→E} twice until you reach {R}.","With {R} as the last line of the subproof, press {→I}."],"sol":[["H","P"],["→E",[1,3]],["→E",[2,4]],["→I"]]},{"t":"P","title":"What was already there","prem":[],"goal":"P→(Q→P)","rules":"imp","intro":"A theorem: it is proved without premises. You will need a subproof inside another, and the rule {R}.","hints":["Assume {P}. Inside, assume {Q}.","In the inner subproof, select line 1 and press {R} to repeat {P}.","Press {→I} twice: first the subproof of {Q} closes, then the one of {P}."],"sol":[["H","P"],["H","Q"],["R",[1]],["→I"],["→I"]]},{"t":"P","title":"Exportation","prem":["(P∧Q)→R"],"goal":"P→(Q→R)","rules":"imp","intro":"Two nested assumptions and a bit of everything so far.","hints":["Assume {P} and then, inside, assume {Q}.","Join {P} and {Q} with {∧I}: now you have the antecedent of the premise.","Apply {→E} to get {R} and close the two subproofs with {→I}."],"sol":[["H","P"],["H","Q"],["∧I",[2,3],"P∧Q"],["→E",[1,4]],["→I"],["→I"]]},{"t":"T","title":"Disjunction","pages":[{"say":"{A∨B} says that at least one of the two is true. Introducing it is easy: if you have {A}, you have {A∨B} for any {B}. That is the rule <b>∨I</b>.","fig":{"k":"fitch","rows":[["m",0,"A",""],["",0,"A∨B","∨I m"],["",0,"B∨A","∨I m"]]}},{"say":"Using it is more delicate, because you do not know which of the two holds. The rule <b>∨E</b> is a proof by cases: if {C} follows from {A} and {C} also follows from {B}, then {C}.","fig":{"k":"fitch","rows":[["m",0,"A∨B",""],["i",1,"A","Assumption","h"],["j",1,"C",""],["k",1,"B","Assumption","h"],["l",1,"C",""],["",0,"C","∨E m, i–j, k–l"]]}},{"say":"In the game: assume the first case and reach {C}. Press <b>Close sub.</b> Assume the second case and reach {C} again. Then press {∨E}: the game finds the disjunction and the two cases."}]},{"t":"P","title":"Commute","prem":["P∨Q"],"goal":"Q∨P","rules":"or","intro":"Proof by cases: in each case you have to reach {Q∨P}.","hints":["Assume {P}. Get {Q∨P} with {∨I} and press <b>Close sub.</b>","Assume {Q} and reach {Q∨P} again with {∨I}.","With the second subproof still open, press {∨E}."],"sol":[["H","P"],["∨I",[2],"Q∨P","Q"],["C"],["H","Q"],["∨I",[4],"Q∨P","P"],["∨E",[1]]]},{"t":"P","title":"Dilemma","prem":["P∨Q","P→R","Q→R"],"goal":"R","rules":"or","intro":"Whatever happens, you reach {R}.","hints":["Case 1: assume {P} and use {→E} with line 2. Then <b>Close sub.</b>","Case 2: assume {Q} and use {→E} with line 3.","Press {∨E}."],"sol":[["H","P"],["→E",[2,4]],["C"],["H","Q"],["→E",[3,6]],["∨E",[1]]]},{"t":"P","title":"Distribute","prem":["P∧(Q∨R)"],"goal":"(P∧Q)∨(P∧R)","rules":"or","intro":"Take the conjunction apart and reason by cases on the disjunction inside it.","hints":["With {∧E} get {P} and {Q∨R} separately.","Case {Q}: form {P∧Q} and turn it into the conclusion with {∨I}. Close the subproof.","Case {R}: form {P∧R}, apply {∨I} and finish with {∨E}."],"sol":[["∧E",[1],"P"],["∧E",[1],"Q∨R"],["H","Q"],["∧I",[2,4],"P∧Q"],["∨I",[5],"(P∧Q)∨(P∧R)","P∧R"],["C"],["H","R"],["∧I",[2,7],"P∧R"],["∨I",[8],"(P∧Q)∨(P∧R)","P∧Q"],["∨E",[3]]]},{"t":"T","title":"Negation and absurdity","pages":[{"say":"The symbol {⊥} stands for absurdity: a contradiction. It appears when you have a formula and its negation at once. That is the rule <b>¬E</b>.","fig":{"k":"fitch","rows":[["m",0,"A",""],["n",0,"¬A",""],["",0,"⊥","¬E m, n"]]}},{"say":"To prove {¬A} you use <b>reductio ad absurdum</b>: you assume {A} and, if you reach {⊥}, you conclude {¬A}. That is the rule <b>¬I</b>.","fig":{"k":"fitch","rows":[["i",1,"A","Assumption","h"],["",1,"⋮",""],["j",1,"⊥",""],["",0,"¬A","¬I i–j"]]}},{"say":"From absurdity anything follows. The rule <b>⊥E</b> (ex falso quodlibet) lets you write any formula you like from {⊥}. In World 6, paraconsistent logic will reject this rule.","fig":{"k":"fitch","rows":[["m",0,"⊥",""],["",0,"A","⊥E m"]]}},{"say":"Finally, <b>¬¬E</b>: from {¬¬A} you get {A}. It looks innocent, but it is the rule that makes this logic <i>classical</i>. With it you prove excluded middle, {P∨¬P}. Remember it: in World 5 we will lose it.","fig":{"k":"fitch","rows":[["m",0,"¬¬A",""],["",0,"A","¬¬E m"]]}}]},{"t":"P","title":"Modus tollens","prem":["P→Q","¬Q"],"goal":"¬P","rules":"neg","intro":"To prove a negation, assume the opposite and look for the absurdity.","hints":["Assume {P}.","With {→E} you get {Q}, which clashes with the premise {¬Q}: apply {¬E}.","With {⊥} at the end of the subproof, press {¬I}."],"sol":[["H","P"],["→E",[1,3]],["¬E",[4,2]],["¬I"]]},{"t":"P","title":"Non-contradiction","prem":[],"goal":"¬(P∧¬P)","rules":"neg","intro":"The principle of non-contradiction, as a theorem.","hints":["Assume {P∧¬P}.","Split it with {∧E} into {P} and {¬P}.","Apply {¬E} and close with {¬I}."],"sol":[["H","P∧¬P"],["∧E",[1],"P"],["∧E",[1],"¬P"],["¬E",[2,3]],["¬I"]]},{"t":"P","title":"Disjunctive syllogism","prem":["P∨Q","¬P"],"goal":"Q","rules":"neg","intro":"One of the two cases is impossible. That is where you need {⊥E}.","hints":["Case {P}: it clashes with {¬P}. Apply {¬E} and then {⊥E} to get {Q}. Close the subproof.","Case {Q}: assume {Q} and that is all: the subproof starts and ends with {Q}.","Press {∨E}."],"sol":[["H","P"],["¬E",[3,2]],["⊥E",[4],null,"Q"],["C"],["H","Q"],["∨E",[1]]]},{"t":"P","title":"Contraposition","prem":["¬Q→¬P"],"goal":"P→Q","rules":"neg","intro":"This direction of contraposition needs {¬¬E}.","hints":["Assume {P}. Inside, assume {¬Q} to look for the absurdity.","With {→E} you get {¬P}, which clashes with {P}.","After {¬I} you will have {¬¬Q}: remove the double negation with {¬¬E} and close with {→I}."],"sol":[["H","P"],["H","¬Q"],["→E",[1,3]],["¬E",[2,4]],["¬I"],["¬¬E",[6]],["→I"]]},{"t":"P","title":"Excluded middle","prem":[],"goal":"P∨¬P","rules":"neg","boss":true,"intro":"The most famous theorem of classical logic. It cannot be proved directly: you have to assume that it is false.","hints":["Assume {¬(P∨¬P)}. The plan is to reach {⊥}, get the double negation and remove it with {¬¬E}.","Inside, assume {P}: with {∨I} you would have {P∨¬P}, which contradicts the assumption. That gives you {¬P} with {¬I}.","With {¬P} form {P∨¬P} again with {∨I}: another contradiction. Close with {¬I} and apply {¬¬E}."],"sol":[["H","¬(P∨¬P)"],["H","P"],["∨I",[2],"P∨¬P","¬P"],["¬E",[3,1]],["¬I"],["∨I",[5],"P∨¬P","P"],["¬E",[6,1]],["¬I"],["¬¬E",[8]]]},{"t":"T","title":"Biconditional","pages":[{"say":"{A↔B} amounts to two conditionals: {A→B} and {B→A}. To introduce it you make two subproofs, one in each direction. That is the rule <b>↔I</b>.","fig":{"k":"fitch","rows":[["i",1,"A","Assumption","h"],["j",1,"B",""],["k",1,"B","Assumption","h"],["l",1,"A",""],["",0,"A↔B","↔I i–j, k–l"]]}},{"say":"To use it there is <b>↔E</b>: with {A↔B} and one of its sides you get the other.","fig":{"k":"fitch","rows":[["m",0,"A↔B",""],["n",0,"B",""],["",0,"A","↔E m, n"]]}}]},{"t":"P","title":"Chain of equivalences","prem":["P↔Q","Q↔R"],"goal":"P↔R","rules":"cl","intro":"Two subproofs: from {P} to {R} and from {R} to {P}.","hints":["Assume {P}. With {↔E} move to {Q} and then to {R}. Press <b>Close sub.</b>","Assume {R} and take the path back to {P}.","Press {↔I} and choose {P↔R}."],"sol":[["H","P"],["↔E",[1,3],"Q"],["↔E",[2,4],"R"],["C"],["H","R"],["↔E",[2,6],"Q"],["↔E",[1,7],"P"],["↔I",[],"P↔R"]]},{"t":"T","title":"Truth and counterexamples","pages":[{"say":"So far you have <i>proved</i> arguments. What about the ones that are not valid? That is what semantics is for. A <b>valuation</b> assigns each letter a value: true (T) or false (F), and the tables compute the rest.","fig":{"k":"table","head":["{A}","{B}","{A∧B}","{A∨B}","{A→B}"],"rows":[["T","T","T","T","T"],["T","F","F","T","F"],["F","T","F","T","T"],["F","F","F","F","T"]]}},{"say":"An argument is valid if <i>no</i> valuation makes the premises true and the conclusion false. Such a valuation is a <b>counterexample</b>. If one exists, no proof is possible: the Fitch rules only prove valid arguments."},{"say":"In the next two challenges there is nothing to prove. You have to find the counterexample: change the values until all the premises are true and the conclusion false."}]},{"t":"M","title":"Affirming the consequent","logic":"CL","prem":["P→Q","Q"],"goal":"P","intro":"A classic fallacy. Look for values that make the premises true and the conclusion false.","outro":"With {P} false and {Q} true, both premises are true and the conclusion false. That is why \"affirming the consequent\" is a fallacy."},{"t":"M","title":"Inclusive or","logic":"CL","prem":["P∨Q","P"],"goal":"¬Q","intro":"In logic, {∨} is inclusive. Show that {¬Q} does not follow from {P∨Q} and {P}.","outro":"If both are true, {P∨Q} is true. Logical disjunction does not rule out that both hold."},{"t":"P","title":"De Morgan","prem":["¬(P∧Q)"],"goal":"¬P∨¬Q","rules":"neg","boss":true,"intro":"The boss of this world. The strategy is the one for excluded middle: assume that the conclusion is false.","hints":["Assume {¬(¬P∨¬Q)}. You want to recover {P} and {Q} to contradict the premise.","For {P}: assume {¬P}, form {¬P∨¬Q} with {∨I}, contradiction, {¬I} and {¬¬E}. Do the same for {Q}.","Join {P} and {Q} with {∧I}, apply {¬E} with the premise, close with {¬I} and finish with {¬¬E}."],"sol":[["H","¬(¬P∨¬Q)"],["H","¬P"],["∨I",[3],"¬P∨¬Q","¬Q"],["¬E",[4,2]],["¬I"],["¬¬E",[6]],["H","¬Q"],["∨I",[8],"¬P∨¬Q","¬P"],["¬E",[9,2]],["¬I"],["¬¬E",[11]],["∧I",[7,12],"P∧Q"],["¬E",[13,1]],["¬I"],["¬¬E",[15]]]}]},{"k":2,"name":"Quantifier Forest","logic":"First-order logic","badge":"∀","intro":"Among these trees sentences open up: there are individuals, properties and two quantifiers.","stages":[{"t":"T","title":"Names, predicates and quantifiers","pages":[{"say":"Propositional logic cannot see inside sentences. <b>First-order</b> logic can: it tells apart individuals and what is said of them. <b>Names</b> ({a}, {b}, {c}…) designate individuals; <b>predicates</b> ({F}, {G}, {R}…) express properties and relations.","fig":{"k":"table","head":["Formula","Read as"],"rows":[["{Fa}","a is F"],["{Rab}","a stands in relation R to b"],["{∀xFx}","everything is F"],["{∃xFx}","something is F"]]}},{"say":"<b>Quantifiers</b> use variables ({x}, {y}, {z}). \"All humans are mortal\" is written {∀x(Hx→Mx)}. \"Some human is wise\" is written {∃x(Hx∧Sx)}. Notice the pattern: {∀} usually goes with {→}, and {∃} with {∧}."},{"say":"All the propositional rules still hold. We only add four: introduction and elimination for each quantifier."}]},{"t":"T","title":"The easy rules: ∀E and ∃I","pages":[{"say":"If everything is {F}, then any individual is {F}. The rule <b>∀E</b> removes the quantifier and puts a name, whichever you like, in place of the variable.","fig":{"k":"fitch","rows":[["m",0,"∀xA(x)",""],["",0,"A(c)","∀E m"]]}},{"say":"If a particular individual is {F}, then something is {F}. The rule <b>∃I</b> swaps a name for a variable and puts {∃} in front.","fig":{"k":"fitch","rows":[["m",0,"A(c)",""],["",0,"∃xA(x)","∃I m"]]}},{"say":"In the game: select the line and press the rule. If there are several ways to apply it, you will see a list of the possible results. With {∃I} you can choose which occurrences of the name are replaced."}]},{"t":"P","title":"Socrates","prem":["∀x(Hx→Mx)","Hs"],"goal":"Ms","rules":"fo1","intro":"All humans are mortal. Socrates is human. You know how this ends.","hints":["Select line 1, press {∀E} and choose the result with the name {s}.","You have {Hs→Ms} and {Hs}: apply {→E}."],"sol":[["∀E",[1],"Hs→Ms"],["→E",[3,2]]]},{"t":"P","title":"From all to some","prem":["∀xFx"],"goal":"∃xFx","rules":"fo1","intro":"In classical logic the domain is never empty: if everything is {F}, something is {F}.","hints":["Go down to the particular case with {∀E}: you will get {Fa}.","Go up with {∃I} from {Fa}."],"sol":[["∀E",[1],"Fa"],["∃I",[2],"∃xFx"]]},{"t":"P","title":"Narcissus","prem":["Laa"],"goal":"∃xLxa","rules":"fo1","intro":"{Laa} says that a loves himself. Prove that someone loves a. You will have to choose which occurrence of the name is replaced.","hints":["Select line 1 and press {∃I}.","From the list, choose {∃xLxa}: only the first {a} is replaced."],"sol":[["∃I",[1],"∃xLxa"]]},{"t":"T","title":"∀I: the arbitrary individual","pages":[{"say":"How do you prove that <i>everything</i> is {F}? You cannot check the individuals one by one. The idea is to prove it of an <b>arbitrary</b> individual: one about which you know nothing special."},{"say":"Rule <b>∀I</b>: from {A(c)} conclude {∀xA(x)}, provided the name {c} appears in no premise and in no open assumption. That condition guarantees that {c} really is arbitrary.","fig":{"k":"fitch","rows":[["m",0,"A(c)",""],["",0,"∀xA(x)","∀I m"]]}},{"say":"If the premise were {Fa}, you could not conclude {∀xFx}: you know something particular about {a}. The game will warn you when a name is not arbitrary."}]},{"t":"P","title":"Barbara","prem":["∀x(Fx→Gx)","∀xFx"],"goal":"∀xGx","rules":"fo2","intro":"Go down to any individual, reason with it and come back up.","hints":["Apply {∀E} to both premises with the same name {a}.","With {→E} get {Ga}.","Since {a} appears in no premise, you can apply {∀I} to {Ga}."],"sol":[["∀E",[1],"Fa→Ga"],["∀E",[2],"Fa"],["→E",[3,4]],["∀I",[5],"∀xGx"]]},{"t":"P","title":"Sharing out the universal","prem":["∀x(Fx∧Gx)"],"goal":"∀xFx∧∀xGx","rules":"fo2","intro":"The universal distributes over conjunction.","hints":["{∀E} on the premise and then {∧E} twice: you get {Fa} and {Ga}.","Generalize each one with {∀I}.","Join the two universals with {∧I}."],"sol":[["∀E",[1],"Fa∧Ga"],["∧E",[2],"Fa"],["∧E",[2],"Ga"],["∀I",[3],"∀xFx"],["∀I",[4],"∀xGx"],["∧I",[5,6],"∀xFx∧∀xGx"]]},{"t":"T","title":"∃E: giving it a name","pages":[{"say":"You know that something is {F}, but you do not know what. The rule <b>∃E</b> lets you give it a temporary name: \"let us call that individual {c}\". You open a subproof assuming {A(c)}, with a <b>new</b> name."},{"say":"If inside the subproof you reach a formula {B} that no longer mentions {c}, you can take it outside: {B} follows from the existential.","fig":{"k":"fitch","rows":[["m",0,"∃xA(x)",""],["i",1,"A(c)","Assumption","h"],["",1,"⋮",""],["j",1,"B",""],["",0,"B","∃E m, i–j"]]}},{"say":"Conditions: {c} does not appear earlier (not in premises, not in open assumptions, not in the existential) nor in {B}. In the game, when you press <b>Assume</b> you will see the instance suggested with a new name."}]},{"t":"P","title":"Keeping one part","prem":["∃x(Fx∧Gx)"],"goal":"∃xFx","rules":"fo","intro":"Give a name to the individual that exists and work with it.","hints":["Press <b>Assume</b> and choose the instance {Fa∧Ga}.","Inside: {∧E} to get {Fa} and then {∃I}.","The last line, {∃xFx}, no longer mentions {a}: press {∃E}."],"sol":[["H","Fa∧Ga"],["∧E",[2],"Fa"],["∃I",[3],"∃xFx"],["∃E",[1]]]},{"t":"P","title":"Darii","prem":["∀x(Fx→Gx)","∃xFx"],"goal":"∃xGx","rules":"fo","intro":"Every F is G, and something is F.","hints":["Assume {Fa}, the instance of the existential.","Apply {∀E} to line 1 with the same name {a} and then {→E}.","Generalize with {∃I} and leave the subproof with {∃E}."],"sol":[["H","Fa"],["∀E",[1],"Fa→Ga"],["→E",[4,3]],["∃I",[5],"∃xGx"],["∃E",[2]]]},{"t":"P","title":"No one","prem":["¬∃xFx"],"goal":"∀x¬Fx","rules":"fo","intro":"If there is no F, then everything is non-F.","hints":["Assume {Fa} for an arbitrary individual.","With {∃I} you get {∃xFx}, which contradicts the premise. Close with {¬I}.","You have {¬Fa} and {a} appears in no premise: apply {∀I}."],"sol":[["H","Fa"],["∃I",[2],"∃xFx"],["¬E",[3,1]],["¬I"],["∀I",[5],"∀x¬Fx"]]},{"t":"P","title":"Order of quantifiers","prem":["∃x∀yRxy"],"goal":"∀y∃xRxy","rules":"fo","intro":"If someone is related to everyone, then everyone has someone related to them.","hints":["Assume the instance {∀yRay}.","With {∀E} choose the result with a new name: {Rab}.","Apply {∃I} to get {∃xRxb}, then {∀I} on {b}, and leave with {∃E}."],"sol":[["H","∀yRay"],["∀E",[2],"Rab"],["∃I",[3],"∃xRxb"],["∀I",[4],"∀y∃xRxy"],["∃E",[1]]]},{"t":"Q","title":"And the other way round?","qs":[{"q":"You have just proved that {∃x∀yRxy} implies {∀y∃xRxy}. Does the converse hold as well?","opts":["Yes, they are equivalent","No: \"everyone has a mother\" does not imply \"there is a mother of everyone\"","Only if the domain is infinite"],"ok":1,"why":"Read {Rxy} as \"x is the mother of y\". That each one has a mother does not mean there is a single mother of all. If you try the proof, the new-name condition blocks you."},{"q":"Why does {∀I} require that the name appear in no premise and in no open assumption?","opts":["To make the proof shorter","Because the name must stand for any individual whatsoever","Because names cannot be repeated"],"ok":1,"why":"If you know something special about {a}, what you prove of {a} may depend on that and not hold for the rest."}]},{"t":"P","title":"Some are not","prem":["¬∀xFx"],"goal":"∃x¬Fx","rules":"fo","boss":true,"intro":"The boss of the forest. It is a classical proof: you will need {¬¬E} twice.","hints":["Assume {¬∃x¬Fx}. The plan: prove {∀xFx} to contradict the premise.","Inside, assume {¬Fa}. With {∃I} you contradict the assumption; {¬I} and {¬¬E} give you {Fa}.","Generalize to {∀xFx} with {∀I}, contradict the premise, close with {¬I} and finish with {¬¬E}."],"sol":[["H","¬∃x¬Fx"],["H","¬Fa"],["∃I",[3],"∃x¬Fx"],["¬E",[4,2]],["¬I"],["¬¬E",[6]],["∀I",[7],"∀xFx"],["¬E",[8,1]],["¬I"],["¬¬E",[10]]]}]},{"k":3,"name":"Archipelago of Worlds","logic":"Propositional modal logic","badge":"□","intro":"Each island is a possible world. What is necessary holds on every island you can reach; what is possible, on some.","stages":[{"t":"T","title":"Necessary and possible","pages":[{"say":"Welcome to the archipelago. Here sentences are not true or false outright: they are so <b>at a possible world</b>. We add two operators: {□A}, \"it is necessary that A\", and {◇A}, \"it is possible that A\"."},{"say":"A <b>Kripke model</b> has worlds and an <b>accessibility</b> relation between them. {□A} is true at a world if {A} is true at every world accessible from it. {◇A} is true if {A} is true at some.","fig":{"k":"kripke","h":150,"w":[{"id":"w1","x":10,"y":50,"t":""},{"id":"w2","x":190,"y":6,"t":"P"},{"id":"w3","x":190,"y":94,"t":"P, Q"}],"e":[["w1","w2"],["w1","w3"]],"cap":"At w1, {□P} and {◇Q} hold, but {□Q} does not."}},{"say":"Depending on the properties of accessibility we get different systems: K, T, S4, S5. We begin with <b>K</b>, the most basic, which assumes nothing about the relation."}]},{"t":"T","title":"Strict subproofs","pages":[{"say":"To prove {□A} you must show that {A} holds at <i>any</i> accessible world. That is done with a <b>strict subproof</b>: it begins with {□} instead of an assumption, and it stands for that other world."},{"say":"Inside a strict subproof you cannot use the lines from outside: they are truths of another world. The exception is <b>□E</b>: if you have {□A} outside, you can write {A} inside, because what is necessary holds at every accessible world.","fig":{"k":"fitch","rows":[["m",0,"□A",""],["i",1,"□","","s"],["",1,"A","□E m"],["",1,"⋮",""],["j",1,"B",""],["",0,"□B","□I i–j"]]}},{"say":"If you reach {B} inside, when you close the subproof you get {□B}. That is the rule <b>□I</b>."},{"say":"In the game: press <b>□ Strict</b> to open one. The lines from outside are marked with a dotted border: they can only come in with {□E}. When you have the formula, press {□I}."}]},{"t":"P","title":"Distribution","prem":["□(P→Q)","□P"],"goal":"□Q","rules":"k","sys":"K","intro":"The principle that gives system K its name: necessity distributes over the conditional.","hints":["Press <b>□ Strict</b>.","Bring in the two premises with {□E}: inside you will have {P→Q} and {P}.","Apply {→E} and close with {□I}."],"sol":[["S"],["□E",[1]],["□E",[2]],["→E",[4,5]],["□I"]]},{"t":"P","title":"Necessitation","prem":[],"goal":"□(P→P)","rules":"k","sys":"K","intro":"Every theorem is necessary. Prove {P→P} inside a strict subproof, without bringing anything in from outside.","hints":["Open a strict subproof and, inside, assume {P}.","Press {→I}: the subproof of {P} closes with {P→P}.","Press {□I}."],"sol":[["S"],["H","P"],["→I"],["□I"]]},{"t":"P","title":"Splitting the box","prem":["□(P∧Q)"],"goal":"□P∧□Q","rules":"k","sys":"K","intro":"You will need two strict subproofs, one for each box.","hints":["First strict subproof: {□E} on the premise, {∧E} to keep {P}, and {□I}.","Second strict subproof: the same, but keep {Q}.","Join {□P} and {□Q} with {∧I}."],"sol":[["S"],["□E",[1]],["∧E",[3],"P"],["□I"],["S"],["□E",[1]],["∧E",[7],"Q"],["□I"],["∧I",[5,9],"□P∧□Q"]]},{"t":"P","title":"Joining boxes","prem":["□P∧□Q"],"goal":"□(P∧Q)","rules":"k","sys":"K","intro":"The opposite direction. Split the premise first: {□E} only acts on formulas that begin with {□}.","hints":["Outside any subproof, use {∧E} to get {□P} and {□Q}.","Open a strict subproof and bring both in with {□E}.","Inside, {∧I}; then {□I}."],"sol":[["∧E",[1],"□P"],["∧E",[1],"□Q"],["S"],["□E",[2]],["□E",[3]],["∧I",[5,6],"P∧Q"],["□I"]]},{"t":"T","title":"Possibility","pages":[{"say":"{◇A} is defined from {□}: something is possible when its negation is not necessary. The rule <b>Def◇</b> turns {◇A} into {¬□¬A} and back.","fig":{"k":"table","head":["Rule","Swaps","with"],"rows":[["{Def◇}","{◇A}","{¬□¬A}"],["{MC}","{¬□A}","{◇¬A}"],["{MC}","{¬◇A}","{□¬A}"]]}},{"say":"The <b>MC</b> rules (modal conversion) move a negation across an operator, swapping {□} for {◇}: \"it is not necessary that A\" amounts to \"it is possible that not A\"."},{"say":"To prove {◇A} the usual way is to assume {□¬A}, reach {⊥}, get {¬□¬A} with {¬I} and apply {Def◇}."}]},{"t":"P","title":"The impossible implies everything","prem":["¬◇P"],"goal":"□(P→Q)","rules":"kd","sys":"K","intro":"A paradox of strict implication: the impossible strictly implies anything.","hints":["Apply {MC} to the premise to get {□¬P}.","Open a strict subproof, bring in {¬P} with {□E} and assume {P}.","Contradiction, {⊥E} to get {Q}, {→I} and {□I}."],"sol":[["MC",[1]],["S"],["□E",[2]],["H","P"],["¬E",[5,4]],["⊥E",[6],null,"Q"],["→I"],["□I"]]},{"t":"P","title":"Inherited possibility","prem":["□(P→Q)","◇P"],"goal":"◇Q","rules":"kd","sys":"K","boss":true,"intro":"The boss of K. To prove {◇Q}, assume {□¬Q} and look for the absurdity.","hints":["Assume {□¬Q}. Inside, open a strict subproof and bring in {P→Q} and {¬Q} with {□E}.","In that world, assume {P}: you reach {⊥}. With {¬I} you get {¬P} and with {□I}, {□¬P}.","Turn the premise {◇P} into {¬□¬P} with {Def◇}: contradiction. Close with {¬I} and apply {Def◇}."],"sol":[["H","□¬Q"],["S"],["□E",[1]],["□E",[3]],["H","P"],["→E",[5,7]],["¬E",[8,6]],["¬I"],["□I"],["Def◇",[2]],["¬E",[11,12]],["¬I"],["Def◇",[14]]]},{"t":"T","title":"The systems T, S4 and S5","pages":[{"say":"In K you cannot even prove {□P→P}. For that, each world has to see itself: <b>reflexive</b> accessibility. System <b>T</b> adds the rule <b>RT</b>: from {□A} you get {A} in the same subproof, without crossing any border."},{"say":"<b>S4</b> adds <b>R4</b>: a formula {□A} can enter a strict subproof <i>intact</i>, without losing its box. It corresponds to <b>transitive</b> accessibility."},{"say":"<b>S5</b> adds <b>R5</b>: a formula {¬□A} or {◇A} can also enter intact. It corresponds to an <b>equivalence</b> relation: all worlds see one another.","fig":{"k":"table","head":["System","New rule","Accessibility","Validates"],"rows":[["K","none","any","{□(A→B)→(□A→□B)}"],["T","{RT}","reflexive","{□A→A}"],["S4","{R4}","reflexive and transitive","{□A→□□A}"],["S5","{R5}","equivalence","{◇A→□◇A}"]]}},{"say":"Each system includes the rules of the previous ones. In each challenge you will see which system you are working in."}]},{"t":"P","title":"The actual is possible","prem":["P"],"goal":"◇P","rules":"t","sys":"T","intro":"In T, what is true is possible. Use {RT}.","hints":["Assume {□¬P}.","{RT} gives you {¬P} in this same world: contradiction with the premise.","Close with {¬I} and apply {Def◇}."],"sol":[["H","□¬P"],["RT",[2]],["¬E",[1,3]],["¬I"],["Def◇",[5]]]},{"t":"P","title":"The necessary is possible","prem":["□P"],"goal":"◇P","rules":"t","sys":"T","intro":"This does not hold in K: a world with no accessible worlds makes {□P} true and {◇P} false.","hints":["Assume {□¬P}.","Apply {RT} to the premise and to the assumption: {P} and {¬P}.","Contradiction, {¬I} and {Def◇}."],"sol":[["H","□¬P"],["RT",[1]],["RT",[2]],["¬E",[3,4]],["¬I"],["Def◇",[6]]]},{"t":"P","title":"Necessarily necessary","prem":["□P"],"goal":"□□P","rules":"s4","sys":"S4","intro":"The characteristic axiom of S4. With {R4} it is immediate.","hints":["Open a strict subproof.","Select line 1 and press {R4}: {□P} comes in with its box.","Press {□I}."],"sol":[["S"],["R4",[1]],["□I"]]},{"t":"P","title":"Possibly possible","prem":["◇◇P"],"goal":"◇P","rules":"s4","sys":"S4","intro":"In S4, repeated modalities collapse.","hints":["Assume {□¬P}. Open a strict subproof and bring in {□¬P} intact with {R4}.","Inside, {MC} turns it into {¬◇P}. Close with {□I}: you have {□¬◇P}.","Apply {Def◇} to the premise: {¬□¬◇P}. Contradiction, {¬I} and {Def◇}."],"sol":[["H","□¬P"],["S"],["R4",[2]],["MC",[4]],["□I"],["Def◇",[1]],["¬E",[6,7]],["¬I"],["Def◇",[9]]]},{"t":"P","title":"Necessarily possible","prem":["◇P"],"goal":"□◇P","rules":"s5","sys":"S5","intro":"The characteristic axiom of S5: what is possible is necessarily possible.","hints":["Open a strict subproof.","Select line 1 and press {R5}.","Press {□I}."],"sol":[["S"],["R5",[1]],["□I"]]},{"t":"P","title":"Axiom B","prem":["P"],"goal":"□◇P","rules":"s5","sys":"S5","intro":"What is true is necessarily possible. Combine what you already know about T and S5.","hints":["First prove {◇P} as in \"The actual is possible\": assume {□¬P}, {RT}, contradiction, {¬I}, {Def◇}.","Open a strict subproof and bring in {◇P} with {R5}.","Press {□I}."],"sol":[["H","□¬P"],["RT",[2]],["¬E",[1,3]],["¬I"],["Def◇",[5]],["S"],["R5",[6]],["□I"]]},{"t":"Q","title":"Frames and axioms","qs":[{"q":"Which property of accessibility makes {□P→P} valid?","opts":["Transitivity","Reflexivity","Symmetry"],"ok":1,"why":"If every world sees itself, what holds at all accessible worlds also holds at the world itself."},{"q":"What happens at a world from which no world is accessible?","opts":["{□P} holds for any P, and no {◇P} holds","Neither {□P} nor {◇P} holds","{◇P} holds for any P"],"ok":0,"why":"{□P} says \"P holds at every accessible world\": if there are none, it holds vacuously. That is why {□P→◇P} cannot be proved in K."},{"q":"In which system does {◇□P} imply {□P}?","opts":["T","S4","S5"],"ok":2,"why":"In S5 only the last operator in a chain counts. That is exactly what you are about to prove."}]},{"t":"P","title":"Possibly necessary","prem":["◇□P"],"goal":"□P","rules":"s5","sys":"S5","boss":true,"intro":"The boss of the archipelago. The modal ontological argument rests on this principle.","hints":["Assume {¬□P} and look for the absurdity.","Open a strict subproof, bring in {¬□P} with {R5} and close it with {□I}: you get {□¬□P}.","Apply {Def◇} to the premise: {¬□¬□P}. Contradiction, {¬I} and {¬¬E}."],"sol":[["H","¬□P"],["S"],["R5",[2]],["□I"],["Def◇",[1]],["¬E",[5,6]],["¬I"],["¬¬E",[8]]]}]},{"k":4,"name":"De Re Citadel","logic":"First-order modal logic","badge":"□∀","intro":"Behind these walls quantifiers meet necessity. It matters a great deal which comes first.","stages":[{"t":"T","title":"Quantifying across worlds","pages":[{"say":"Now we put everything together: quantifiers and modal operators. The rules are the ones you already know. What is new is what happens when {□} meets {∀} or {∃}."},{"say":"Compare {□∃xGx} with {∃x□Gx}. The first is <b>de dicto</b>: at each world there is some G, perhaps a different one each time. The second is <b>de re</b>: there is one particular individual that is G at every world.","fig":{"k":"table","head":["Formula","Reading","Example"],"rows":[["{□∃xGx}","de dicto","Necessarily, someone wins the lottery"],["{∃x□Gx}","de re","There is someone who necessarily wins"]]}},{"say":"The de re reading implies the de dicto one, but not the other way round. You are about to prove it."}]},{"t":"T","title":"The Barcan formula","pages":[{"say":"In 1946 Ruth Barcan Marcus proposed a famous principle: {∀x□Fx→□∀xFx}. If each thing is necessarily F, then necessarily everything is F."},{"say":"Is it valid? It depends on the domains. If the same individuals exist at every world (<b>constant domain</b>), yes. If another world may contain new individuals, one of them might not be F, and the principle fails.","fig":{"k":"kripke","h":110,"w":[{"id":"w1","x":10,"y":30,"t":"a exists"},{"id":"w2","x":180,"y":30,"t":"a and b exist"}],"e":[["w1","w2"]],"cap":"Varying domains: at w2 there is an individual b that did not exist at w1."}},{"say":"Our system combines strict subproofs with the classical quantifier rules, and names designate the same thing at every world. That is enough to prove the Barcan formula and its converse: it is the constant-domain logic. For varying domains the quantifier rules would have to be restricted."}]},{"t":"P","title":"The Barcan formula","prem":["∀x□Fx"],"goal":"□∀xFx","rules":"qk","sys":"K","intro":"The proof is short. Notice why {∀I} works inside the strict subproof.","hints":["Outside, apply {∀E} to get {□Fa}.","Open a strict subproof and bring in {Fa} with {□E}.","Inside, {∀I} on {a} (it does not appear in the premise) and then {□I}."],"sol":[["∀E",[1],"□Fa"],["S"],["□E",[2]],["∀I",[4],"∀xFx"],["□I"]]},{"t":"P","title":"The converse Barcan formula","prem":["□∀xFx"],"goal":"∀x□Fx","rules":"qk","sys":"K","intro":"Now in the other direction.","hints":["Open a strict subproof and bring in {∀xFx} with {□E}.","Inside, {∀E} to get {Fa}; close with {□I}.","Outside you have {□Fa}: apply {∀I}."],"sol":[["S"],["□E",[1]],["∀E",[3],"Fa"],["□I"],["∀I",[5],"∀x□Fx"]]},{"t":"P","title":"From de re to de dicto","prem":["∃x□Fx"],"goal":"□∃xFx","rules":"qk","sys":"K","intro":"If there is something that is necessarily F, then necessarily there is something that is F.","hints":["Assume the instance {□Fa}.","Inside, open a strict subproof, bring in {Fa} with {□E} and apply {∃I}.","Close with {□I} and leave with {∃E}."],"sol":[["H","□Fa"],["S"],["□E",[2]],["∃I",[4],"∃xFx"],["□I"],["∃E",[1]]]},{"t":"P","title":"Necessary syllogism","prem":["□∀x(Fx→Gx)","□Fa"],"goal":"□Ga","rules":"qk","sys":"K","intro":"A whole syllogism, but inside another world.","hints":["Open a strict subproof and bring in the two premises with {□E}.","Inside, {∀E} with the name {a} and then {→E}.","Press {□I}."],"sol":[["S"],["□E",[1]],["□E",[2]],["∀E",[4],"Fa→Ga"],["→E",[6,5]],["□I"]]},{"t":"P","title":"Essences realized","prem":["∀x□Fx"],"goal":"∃xFx","rules":"qt","sys":"T","intro":"In T what is necessary is true, and the domain is not empty.","hints":["{∀E} gives you {□Fa}.","{RT} gives you {Fa}.","Finish with {∃I}."],"sol":[["∀E",[1],"□Fa"],["RT",[2]],["∃I",[3],"∃xFx"]]},{"t":"Q","title":"De dicto and de re","qs":[{"q":"Does the converse of the challenge \"From de re to de dicto\" hold, that is, from {□∃xFx} to {∃x□Fx}?","opts":["Yes","No: that there is always a winner does not mean someone always wins","Only in S5"],"ok":1,"why":"A different individual may win at each world. If you try the proof, {∃E} inside the strict subproof does not let you take the name outside."},{"q":"Which assumption makes the Barcan formula valid?","opts":["That all worlds have the same individuals","That accessibility is reflexive","That there are no names"],"ok":0,"why":"With a constant domain, what holds of each individual here holds of each individual there, because they are the same ones."}]},{"t":"P","title":"De re possibility","prem":["∃x◇Fx"],"goal":"◇∃xFx","rules":"qk","sys":"K","boss":true,"intro":"The boss of the citadel: fifteen lines and four nested subproofs. Take a deep breath.","hints":["Assume the instance {◇Fa}. Inside, assume {□¬∃xFx} to look for the absurdity.","Open a strict subproof and bring in {¬∃xFx}. Assume {Fa}: with {∃I} there is a contradiction. {¬I} gives {¬Fa}; {□I} gives {□¬Fa}.","{Def◇} on {◇Fa} gives {¬□¬Fa}: contradiction. {¬I}, {Def◇} and finally {∃E}."],"sol":[["H","◇Fa"],["H","□¬∃xFx"],["S"],["□E",[3]],["H","Fa"],["∃I",[6],"∃xFx"],["¬E",[7,5]],["¬I"],["□I"],["Def◇",[2]],["¬E",[10,11]],["¬I"],["Def◇",[13]],["∃E",[1]]]}]},{"k":5,"name":"The Constructor's Workshop","logic":"Intuitionistic logic","badge":"¬¬","intro":"In this workshop only what gets built counts. One rule stays at the door.","stages":[{"t":"T","title":"Truth as construction","pages":[{"say":"This workshop belongs to L. E. J. Brouwer. For <b>intuitionism</b>, to assert a mathematical proposition is to have a construction that proves it. Truth is not sitting out there waiting: it is built."},{"say":"That changes the meaning of the connectives. This is the BHK interpretation (Brouwer, Heyting, Kolmogorov).","fig":{"k":"table","head":["A proof of…","consists of…"],"rows":[["{A∧B}","a proof of A and a proof of B"],["{A∨B}","a proof of A or one of B, knowing which"],["{A→B}","a method that turns proofs of A into proofs of B"],["{¬A}","a method that turns any proof of A into an absurdity"]]}},{"say":"On that reading, {P∨¬P} is no longer obvious: it would require having a proof of {P} or a refutation of {P}, and there are open problems for which we have neither."}]},{"t":"T","title":"One rule fewer","pages":[{"say":"In natural deduction the difference is tiny: intuitionistic logic is classical logic <b>without the rule ¬¬E</b>. All the others stay, including {⊥E}."},{"say":"From {¬¬A} you can no longer move to {A}. Knowing that {A} cannot be refuted is not the same as having built it.","fig":{"k":"table","head":["Provable","Not provable"],"rows":[["{P→¬¬P}","{¬¬P→P}"],["{¬¬¬P→¬P}","{P∨¬P}"],["{(P→Q)→(¬Q→¬P)}","{(¬Q→¬P)→(P→Q)}"],["{¬(P∨Q)→(¬P∧¬Q)}","{¬(P∧Q)→(¬P∨¬Q)}"]]}},{"say":"Look at the rule bar in the next challenge: {¬¬E} is gone. Let us see how much can be done without it."}]},{"t":"P","title":"The good half","prem":["P"],"goal":"¬¬P","rules":"int","intro":"Double negation can still be <i>introduced</i>.","hints":["Assume {¬P}.","It clashes with the premise: {¬E}.","Press {¬I}."],"sol":[["H","¬P"],["¬E",[1,2]],["¬I"]]},{"t":"P","title":"Triple negation","prem":["¬¬¬P"],"goal":"¬P","rules":"int","intro":"Three negations reduce to one. Two do not reduce to none.","hints":["Assume {P}. You want to contradict {¬¬¬P}, so you need {¬¬P}.","Inside, assume {¬P}: it clashes with {P}. {¬I} gives you {¬¬P}.","{¬¬P} and the premise contradict each other: {¬E} and {¬I}."],"sol":[["H","P"],["H","¬P"],["¬E",[2,3]],["¬I"],["¬E",[5,1]],["¬I"]]},{"t":"P","title":"Constructive contraposition","prem":["P→Q"],"goal":"¬Q→¬P","rules":"int","intro":"This direction of contraposition does not need {¬¬E}.","hints":["Assume {¬Q} and, inside, assume {P}.","{→E} gives you {Q}, which clashes with {¬Q}.","{¬I} and then {→I}."],"sol":[["H","¬Q"],["H","P"],["→E",[1,3]],["¬E",[4,2]],["¬I"],["→I"]]},{"t":"P","title":"Constructive De Morgan","prem":["¬(P∨Q)"],"goal":"¬P∧¬Q","rules":"int","intro":"This De Morgan law holds here too. The one you beat in World 1 does not.","hints":["Assume {P}; with {∨I} you form {P∨Q}, which contradicts the premise. {¬I} gives {¬P}.","Repeat with {Q} to get {¬Q}.","Join them with {∧I}."],"sol":[["H","P"],["∨I",[2],"P∨Q","Q"],["¬E",[3,1]],["¬I"],["H","Q"],["∨I",[6],"P∨Q","P"],["¬E",[7,1]],["¬I"],["∧I",[5,9],"¬P∧¬Q"]]},{"t":"P","title":"From \"or\" to \"if\"","prem":["¬P∨Q"],"goal":"P→Q","rules":"int","intro":"It holds in this direction. The converse, from {P→Q} to {¬P∨Q}, is not constructive.","hints":["Assume {P} and reason by cases on the premise.","Case {¬P}: contradiction and {⊥E} to get {Q}. Close the subproof.","Case {Q}: assuming it is enough. {∨E} and then {→I}."],"sol":[["H","P"],["H","¬P"],["¬E",[2,3]],["⊥E",[4],null,"Q"],["C"],["H","Q"],["∨E",[1]],["→I"]]},{"t":"P","title":"A witness against","prem":["∃x¬Fx"],"goal":"¬∀xFx","rules":"intfo","intro":"A counterexample refutes a universal. The converse (\"Some are not\", from World 2) is not constructive: it does not hand you the witness.","hints":["Assume {∀xFx}. Inside, assume the instance {¬Fa}.","{∀E} gives you {Fa}: contradiction.","The last line is {⊥}, which does not mention {a}: press {∃E} and then {¬I}."],"sol":[["H","∀xFx"],["H","¬Fa"],["∀E",[2],"Fa"],["¬E",[4,3]],["∃E",[1]],["¬I"]]},{"t":"T","title":"States of knowledge","pages":[{"say":"Kripke also gave a semantics for intuitionism. The points are <b>states of knowledge</b> ordered in time. What is already proved stays proved later: knowledge only grows."},{"say":"{¬A} holds at a state if {A} never comes to hold at any later state. {A→B} holds if at every later state where {A} holds, {B} holds too.","fig":{"k":"kripke","h":110,"w":[{"id":"w0","x":10,"y":30,"t":"nothing proved"},{"id":"w1","x":200,"y":30,"t":"P"}],"e":[["w0","w1"]],"cap":"At w0, {P} does not hold: it is not proved yet. Neither does {¬P}: it gets proved at w1. So {P∨¬P} does not hold at w0."}},{"say":"That diagram is a countermodel to excluded middle. And yet {¬¬(P∨¬P)} can be proved: excluded middle is not provable, but it is not refutable either."}]},{"t":"Q","title":"Constructive or not?","qs":[{"q":"Can {¬¬P→P} be proved in intuitionistic logic?","opts":["Yes","No"],"ok":1,"why":"In the two-state model, {¬¬P} holds at w0 (there is no later state where {¬P} holds) but {P} does not."},{"q":"And {¬(P∧Q)→(¬P∨¬Q)}?","opts":["Yes","No"],"ok":1,"why":"Knowing that {P} and {Q} cannot hold together does not tell you which of the two fails, and a disjunction requires knowing which."},{"q":"And {(¬P∨¬Q)→¬(P∧Q)}?","opts":["Yes","No"],"ok":0,"why":"If you have refuted one of the two, any proof of {P∧Q} leads to absurdity. It is an ordinary proof by cases."},{"q":"If {A∨B} is proved in intuitionistic logic with no premises, what else do we know?","opts":["Nothing else","That {A} can be proved or {B} can be proved","That {A} and {B} are equivalent"],"ok":1,"why":"It is the <b>disjunction property</b>. Classical logic lacks it: it proves {P∨¬P} without proving either one."}]},{"t":"P","title":"Double negation shared out","prem":["¬¬(P∧Q)"],"goal":"¬¬P","rules":"int","intro":"Double negation passes through conjunction.","hints":["Assume {¬P}. You want to contradict the premise: you need {¬(P∧Q)}.","Inside, assume {P∧Q}; {∧E} gives {P}, which clashes with {¬P}. {¬I}.","{¬(P∧Q)} contradicts the premise: {¬E} and {¬I}."],"sol":[["H","¬P"],["H","P∧Q"],["∧E",[3],"P"],["¬E",[4,2]],["¬I"],["¬E",[6,1]],["¬I"]]},{"t":"P","title":"Irrefutable middle","prem":[],"goal":"¬¬(P∨¬P)","rules":"int","boss":true,"intro":"Glivenko's theorem: if a propositional formula is classically provable, its double negation is intuitionistically provable. Check it with excluded middle.","hints":["It is the proof from World 1 without the last step. Assume {¬(P∨¬P)}.","Inside, assume {P}: {∨I} and contradiction. {¬I} gives {¬P}.","With {¬P} form {P∨¬P} again: contradiction and {¬I}."],"sol":[["H","¬(P∨¬P)"],["H","P"],["∨I",[2],"P∨¬P","¬P"],["¬E",[3,1]],["¬I"],["∨I",[5],"P∨¬P","P"],["¬E",[6,1]],["¬I"]]},{"t":"P","title":"Glivenko again","prem":[],"goal":"¬¬(¬¬P→P)","rules":"int","boss":true,"intro":"The last boss of the workshop: double negation elimination is not refutable either.","hints":["Assume {¬(¬¬P→P)}. First prove {¬P}: assume {P}, and inside assume {¬¬P} and reiterate {P}; {→I} gives {¬¬P→P}, contradiction.","Now, with {¬P}: assume {¬¬P}. They contradict each other; {⊥E} gives you {P}.","{→I} gives {¬¬P→P} again: contradiction and {¬I}."],"sol":[["H","¬(¬¬P→P)"],["H","P"],["H","¬¬P"],["R",[2]],["→I"],["¬E",[5,1]],["¬I"],["H","¬¬P"],["¬E",[7,8]],["⊥E",[9],null,"P"],["→I"],["¬E",[11,1]],["¬I"]]}]},{"k":6,"name":"Cavern of Contradictions","logic":"Paraconsistent logic (LP)","badge":"⊥","intro":"Down here a contradiction does not blow anything up. Come in carefully, and without {⊥E}.","stages":[{"t":"T","title":"Explosion","pages":[{"say":"Last stop. In classical and intuitionistic logic the principle of <b>explosion</b> holds: from a contradiction anything follows, {A, ¬A ⊢ B}. You used it under the name {⊥E}."},{"say":"That means a theory with a single contradiction proves everything and stops being useful. But we reason every day with inconsistent information: databases with errors, scientific theories in conflict, laws that clash, paradoxes."},{"say":"A logic is <b>paraconsistent</b> if it rejects explosion. Some philosophers, such as Graham Priest, go further and hold that there are true contradictions (<b>dialetheism</b>). The liar sentence, \"this sentence is false\", would be one."}]},{"t":"T","title":"LP: three values","pages":[{"say":"Priest's <b>Logic of Paradox</b> (LP) adds a third value. A sentence can be true (T), false (F) or <b>both</b> (B)."},{"say":"The connectives are computed by ordering the values: F, B, T. Conjunction takes the lower one, disjunction the higher one, and negation swaps T and F and leaves B as it is.","fig":[{"k":"table","head":["{A}","{¬A}"],"rows":[["T","F"],["B","B"],["F","T"]]},{"k":"table","head":["{∧}","T","B","F"],"rows":[["<b>T</b>","T","B","F"],["<b>B</b>","B","B","F"],["<b>F</b>","F","F","F"]]}]},{"say":"An argument is valid in LP if, whenever the premises are <b>at least true</b> (T or B), so is the conclusion. T and B are the <b>designated</b> values."},{"say":"Now it is your turn to defuse explosion. Look for a valuation where the premises are designated and the conclusion is not."}]},{"t":"M","title":"Defuse the bomb","logic":"LP","prem":["P","¬P"],"goal":"Q","intro":"In classical logic this has no counterexample. In LP it does: use the third value.","outro":"If {P} is true and false at once, {P} and {¬P} are designated, and {Q} can simply be false. Explosion is not valid in LP."},{"t":"M","title":"Goodbye, disjunctive syllogism","logic":"LP","prem":["P∨Q","¬P"],"goal":"Q","intro":"Disjunctive syllogism is the hidden engine of explosion. Show that it does not hold either.","outro":"It fails when {P} is true and false at once. And since the material conditional {P→Q} is {¬P∨Q}, modus ponens fails with it too."},{"t":"T","title":"Proving in LP","pages":[{"say":"LP has its own natural deduction. The rules for {∧} and {∨} stay. {⊥}, {¬I}, {¬E} and the conditional disappear. Negation is handled with three new rules.","fig":{"k":"table","head":["Rule","What it allows"],"rows":[["{DN}","going from {A} to {¬¬A}, and back"],["{DeM}","going from {¬(A∧B)} to {¬A∨¬B}, and back"],["{DeM}","going from {¬(A∨B)} to {¬A∧¬B}, and back"],["{LEM}","writing {A∨¬A} at any moment"]]}},{"say":"A curious fact: LP has exactly the same <b>theorems</b> as classical logic. Even {¬(P∧¬P)} is a theorem. What changes are the valid <b>inferences</b>: there are fewer."},{"say":"In LP a contradiction can be true, and so can the law of non-contradiction. If {P} has the value B, both {P∧¬P} and {¬(P∧¬P)} have the value B."}]},{"t":"P","title":"Plain De Morgan","prem":["¬(P∨Q)"],"goal":"¬P","rules":"lp","sys":"LP","intro":"No reductio. Negation moves with {DeM}.","hints":["Select the premise and press {DeM}.","Keep {¬P} using {∧E}."],"sol":[["DeM",[1]],["∧E",[2],"¬P"]]},{"t":"P","title":"Non-contradiction, all the same","prem":[],"goal":"¬(P∧¬P)","rules":"lp","sys":"LP","intro":"LP admits true contradictions and still proves the law of non-contradiction.","hints":["Press {LEM} and choose the formula {¬P}: you get {¬P∨¬¬P}.","Apply {DeM} to it."],"sol":[["LEM",[],null,"¬P"],["DeM",[1]]]},{"t":"P","title":"De Morgan and back","prem":["¬(P∧Q)"],"goal":"¬Q∨¬P","rules":"lp","sys":"LP","intro":"Proof by cases still works as always.","hints":["{DeM} on the premise gives {¬P∨¬Q}.","Case {¬P}: {∨I} up to {¬Q∨¬P} and <b>Close sub.</b>","Case {¬Q}: {∨I} and then {∨E}."],"sol":[["DeM",[1]],["H","¬P"],["∨I",[3],"¬Q∨¬P","¬Q"],["C"],["H","¬Q"],["∨I",[5],"¬Q∨¬P","¬P"],["∨E",[2]]]},{"t":"P","title":"Disjunctive syllogism with a caveat","prem":["P","¬P∨Q"],"goal":"Q∨(P∧¬P)","rules":"lp","sys":"LP","intro":"Disjunctive syllogism does not hold in LP, but a cautious version does: either {Q}, or there is a contradiction.","hints":["Reason by cases on {¬P∨Q}.","Case {¬P}: join it with {P} by {∧I} and move to the conclusion with {∨I}. Close the subproof.","Case {Q}: {∨I} directly, and {∨E}."],"sol":[["H","¬P"],["∧I",[1,3],"P∧¬P"],["∨I",[4],"Q∨(P∧¬P)","Q"],["C"],["H","Q"],["∨I",[6],"Q∨(P∧¬P)","P∧¬P"],["∨E",[2]]]},{"t":"P","title":"Modus ponens with a caveat","prem":["¬(P∧¬Q)","P"],"goal":"Q∨(P∧¬P)","rules":"lp","sys":"LP","boss":true,"intro":"The final boss. {¬(P∧¬Q)} is another way of writing \"if P then Q\". In LP you can only detach the consequent with a caveat.","hints":["{DeM} on the first premise: {¬P∨¬¬Q}.","Case {¬P}: form {P∧¬P} and apply {∨I}. Close the subproof.","Case {¬¬Q}: {DN} gives you {Q}; then {∨I} and {∨E}."],"sol":[["DeM",[1]],["H","¬P"],["∧I",[2,4],"P∧¬P"],["∨I",[5],"Q∨(P∧¬P)","Q"],["C"],["H","¬¬Q"],["DN",[7],"Q"],["∨I",[8],"Q∨(P∧¬P)","P∧¬P"],["∨E",[3]]]},{"t":"T","title":"The map of logics","pages":[{"say":"You have travelled through six logics. Look at what each one accepts.","fig":{"k":"table","head":["Principle","Classical","Intuitionistic","LP"],"rows":[["{P∨¬P}","yes","no","yes"],["{¬¬P ⊢ P}","yes","no","yes"],["{P, ¬P ⊢ Q}","yes","yes","no"],["{P∨Q, ¬P ⊢ Q}","yes","yes","no"]]}},{"say":"Classical logic accepts everything. Intuitionistic logic gives up excluded middle in exchange for constructive proofs. Paraconsistent logic gives up explosion in order to live with contradictions. Modal logics take nothing away: they add operators to talk about necessity and possibility."},{"say":"Each one answers to a different idea of what truth is and what it means for something to follow from something. One final exam remains. After that, the cavern is yours."}]},{"t":"Q","title":"Final exam","qs":[{"q":"Which rule must be removed from classical logic to obtain intuitionistic logic?","opts":["{⊥E}","{¬¬E}","{→I}"],"ok":1,"why":"Without {¬¬E} neither {P∨¬P} nor {¬¬P→P} can be proved."},{"q":"What does a strict subproof stand for?","opts":["Any assumption","An arbitrary accessible world","An arbitrary individual"],"ok":1,"why":"That is why only necessary formulas come into it, and what is proved inside comes out with {□} in front."},{"q":"What do classical logic and LP have in common?","opts":["The same theorems","The same valid inferences","The same truth values"],"ok":0,"why":"LP proves the same formulas without premises, but validates fewer inferences: explosion and disjunctive syllogism fail."},{"q":"Which of these logics rejects {P, ¬P ⊢ Q}?","opts":["Intuitionistic","S5","LP"],"ok":2,"why":"Only paraconsistent logics reject explosion. Q.E.D.!"}]}]}]}; })(typeof window !== 'undefined' ? window : globalThis);
+
+/* Lógica Advance — interfaz */
+(function () {
+'use strict';
+const L = window.Logic, C = window.CONTENT;
+const app = document.getElementById('app');
+const modal = document.getElementById('modal');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ---------- glifos de píxel (7 filas) ---------- */
+const GLY = {
+  '¬': ['......', '......', '######', '.....#', '.....#', '......', '......'],
+  '∧': ['...#...', '...#...', '..#.#..', '..#.#..', '.#...#.', '.#...#.', '#.....#'],
+  '∨': ['#.....#', '.#...#.', '.#...#.', '..#.#..', '..#.#..', '...#...', '...#...'],
+  '→': ['.......', '....#..', '.....#.', '#######', '.....#.', '....#..', '.......'],
+  '↔': ['.........', '..#...#..', '.#.....#.', '#########', '.#.....#.', '..#...#..', '.........'],
+  '⊥': ['...#...', '...#...', '...#...', '...#...', '...#...', '...#...', '#######'],
+  '∀': ['#.....#', '#.....#', '.#####.', '.#...#.', '..#.#..', '..#.#..', '...#...'],
+  '∃': ['######', '.....#', '.....#', '..####', '.....#', '.....#', '######'],
+  '□': ['#######', '#.....#', '#.....#', '#.....#', '#.....#', '#.....#', '#######'],
+  '◇': ['...#...', '..#.#..', '.#...#.', '#.....#', '.#...#.', '..#.#..', '...#...'],
+  '⊢': ['#.....', '#.....', '#.....', '######', '#.....', '#.....', '#.....'],
+  '⊬': ['#.....#', '#....#.', '#...#..', '#######', '#.#....', '##.....', '#......'],
+  '⊨': ['#.....', '#.....', '######', '#.....', '######', '#.....', '#.....'],
+  '⋮': ['.#.', '...', '...', '.#.', '...', '...', '.#.'],
+  star: ['...#...', '...#...', '#######', '.#####.', '..###..', '.##.##.', '.#...#.'],
+  lock: ['..###..', '.#...#.', '.#...#.', '#######', '###.###', '###.###', '#######'],
+  check: ['.......', '......#', '.....##', '#...##.', '##.##..', '.###...', '..#....'],
+  cross: ['#.....#', '.#...#.', '..#.#..', '...#...', '..#.#..', '.#...#.', '#.....#'],
+  book: ['#####..', '#...##.', '#.....#', '#.###.#', '#.....#', '#.###.#', '#######'],
+  grid: ['#######', '#.#.#.#', '#######', '#.#.#.#', '#######', '#.#.#.#', '#######'],
+  quiz: ['.####.', '#....#', '....#.', '...#..', '..#...', '......', '..#...'],
+  note: ['...###', '...#.#', '...#..', '...#..', '.###..', '####..', '.##...'],
+  spk: ['...#...', '..##.#.', '####..#', '####..#', '####..#', '..##.#.', '...#...'],
+  back: ['...#', '..##', '.###', '####', '.###', '..##', '...#'],
+  next: ['#...', '##..', '###.', '####', '###.', '##..', '#...'],
+  down: ['.......', '.......', '#######', '.#####.', '..###..', '...#...', '.......'],
+  undo: ['..#....', '.#.....', '######.', '.#....#', '..#...#', '......#', '..####.']
+};
+const OPS = '∧∨→↔⊢⊬⊨';
+const gcache = {};
+function glyph(ch) {
+  if (gcache[ch]) return gcache[ch];
+  const rows = GLY[ch], w = rows[0].length;
+  let r = '';
+  rows.forEach((row, y) => {
+    for (let x = 0; x < w; x++) if (row[x] === '#') {
+      let x2 = x;
+      while (row[x2 + 1] === '#') x2++;
+      r += `<rect x="${x}" y="${y}" width="${x2 - x + 1}" height="1"/>`;
+      x = x2;
+    }
+  });
+  const cls = OPS.includes(ch) ? 'g op' : 'g';
+  return (gcache[ch] = `<svg class="${cls}" viewBox="0 0 ${w} 7" style="width:${(w / 7 * 0.6).toFixed(3)}em" aria-hidden="true" shape-rendering="crispEdges">${r}</svg>`);
+}
+const ico = glyph;
+function raw(s) {
+  let h = '';
+  for (const ch of String(s)) h += GLY[ch] ? glyph(ch) : esc(ch);
+  return h;
+}
+const fm = s => `<span class="fm${L.RULES[s] ? " rn" : ""}" aria-label="${esc(s)}">${raw(s)}</span>`;
+const fh = f => fm(L.str(f));
+const tx = s => String(s).replace(/\{([^}]*)\}/g, (m, a) => fm(a));
+
+/* ---------- Minerva (24×24) y sus expresiones ---------- */
+const SP = window.SPRITE;
+const MOODS = { neutral: 'attentive', happy: 'happy', sad: 'worried', think: 'thoughtful', brave: 'determined' };
+function runs(rowsOf) {
+  let r = '';
+  rowsOf.forEach(([x0, y, s]) => {
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (c === '.') continue;
+      let j = i;
+      while (s[j + 1] === c) j++;
+      r += `<rect x="${x0 + i}" y="${y}" width="${j - i + 1}" height="1" fill="${SP.PAL[c]}"/>`;
+      i = j;
+    }
+  });
+  return r;
+}
+const owlCache = {};
+function owlBody(mood) {
+  if (owlCache[mood]) return owlCache[mood];
+  const base = runs(SP.grid(mood).map((row, y) => [0, y, row.join('')]));
+  const blink = mood === 'happy' ? '' : `<g class="blk">${runs(SP.eyePatch('blink'))}</g>`;
+  const beak = mood === 'happy' ? '' : `<g class="bk">${runs(SP.BEAK_OPEN)}</g>`;
+  const spark = mood === 'happy' ? `<g class="spk">${runs(SP.SPARK)}</g>` : '';
+  return (owlCache[mood] = base + blink + beak + spark);
+}
+const owl = (px, mood) => {
+  const m = MOODS[mood] ? mood : 'neutral';
+  return `<svg class="owl m-${m}" width="${24 * px}" height="${24 * px}" viewBox="0 0 24 24" shape-rendering="crispEdges" role="img" aria-label="Minerva the owl, ${MOODS[m]}">${owlBody(m)}</svg>`;
+};
+const EN = window.LA_LANG === 'en';
+/* el ánimo de Minerva sale del propio texto: una exclamación la alegra, una pregunta la pone a pensar */
+const moodOf = text => ((EN ? /!/ : /¡/).test(text) ? 'happy' : /\?/.test(text) ? 'think' : 'neutral');
+
+/* ---------- partida guardada ---------- */
+const KEY = 'logica-advance-v1';
+const save = { done: {}, mv: null, sv: null, free: false, theme: '' };   // mv y sv: volumen de música y efectos, de 0 a 5
+try { Object.assign(save, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { /* sin almacenamiento */ }
+if (window.LA_SAVE) Object.assign(save, window.LA_SAVE);   // partida prefijada (video promocional)
+const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* sin almacenamiento */ } };
+if (save.mv == null) save.mv = save.music === false ? 0 : 3;
+if (save.sv == null) save.sv = save.mute ? 0 : 4;
+if (!save.v) {   // la versión 2 añadió el mundo 0: las claves de progreso se corren un mundo
+  const d = {};
+  Object.keys(save.done).forEach(k => { const p = k.split('-'); d[(+p[0] + 1) + '-' + p[1]] = save.done[k]; });
+  save.done = d; save.v = 2; persist();
+}
+const applyTheme = () => { if (save.theme) document.documentElement.dataset.theme = save.theme; else delete document.documentElement.dataset.theme; };
+applyTheme();
+
+const sid = (w, s) => w + '-' + s;
+const isEx = s => s.t !== 'T';
+function wstat(w) {
+  const st = C.worlds[w].stages;
+  let done = 0, stars = 0;
+  st.forEach((s, i) => { const d = save.done[sid(w, i)]; if (d) { done++; if (isEx(s)) stars += d; } });
+  return { done, total: st.length, stars, max: st.filter(isEx).length * 3 };
+}
+const worldOpen = w => w <= 1 || save.free || wstat(w - 1).done / wstat(w - 1).total >= 0.6;
+const stageOpen = (w, s) => s === 0 || save.free || !!save.done[sid(w, s - 1)] || !!save.done[sid(w, s)];
+const totalStars = () => C.worlds.reduce((n, W, i) => n + wstat(i).stars, 0);
+
+/* ---------- sonido ---------- */
+const AU = window.LAudio, sfx = AU.sfx;
+const MVOL = [0, 0.07, 0.13, 0.22, 0.34, 0.5], SVOL = [0, 0.3, 0.55, 0.8, 1, 1.25];
+const applySound = () => AU.set({ sfx: save.sv > 0, music: save.mv > 0, mv: MVOL[save.mv], sv: SVOL[save.sv] });
+applySound();
+/* cada sección tiene su tema: portada, mapa, un tema por mundo (tranquilo en la teoría) y el de los jefes */
+function songFor() {
+  if (V.scr === 'title' || V.scr === 'map') return V.scr;
+  const w = 'w' + C.worlds[V.w].k;
+  if (V.scr === 'world' || ST.type === 'T') return w + 'c';
+  return ST.stage.boss ? 'boss' : w;
+}
+
+/* ---------- navegación ---------- */
+let V = { scr: 'title', w: 0, s: 0 };
+let ST = null;      // estado de la etapa en curso
+let FD = null;      // cuadro de fórmula abierto
+let twTimer = null;
+let lastTw = null;  // último texto que Minerva ya dijo letra a letra
+
+function go(scr, w, s) {
+  V = { scr, w: w == null ? V.w : w, s: s == null ? V.s : s };
+  closeModal();
+  lastTw = null;
+  if (scr === 'stage') enterStage();
+  render();
+  app.scrollTop = 0;
+}
+function render() {
+  clearInterval(twTimer);
+  document.documentElement.style.setProperty('--wc', `var(--w${C.worlds[V.w].k})`);
+  app.className = 'screen scr-' + V.scr + (V.scr === 'world' || V.scr === 'stage' ? ' w' + C.worlds[V.w].k : '');
+  app.innerHTML = '<div class="fit">' + ({ title: scrTitle, map: scrMap, world: scrWorld, stage: scrStage })[V.scr]() + '</div>';
+  AU.play(songFor());
+  const sayEl = app.querySelector('.say[data-tw]');
+  if (sayEl) {
+    const key = sayEl.dataset.tw + '|' + sayEl.textContent;
+    if (key !== lastTw) { lastTw = key; typewriter(sayEl); }
+  }
+  fit();
+  if (V.scr === 'stage' && ST.type === 'P') {
+    const sheet = app.querySelector('#sheet');
+    if (sheet && (ST.flash != null || ST.playing)) sheet.scrollTop = sheet.scrollHeight;
+  }
+  padShow(); legend();
+}
+/* Ajusta la pantalla al alto de la consola para no tener que deslizar: primero limita la hoja de la
+   prueba (que se desliza por dentro si es larga) y luego reduce todo en proporción, hasta un mínimo legible. */
+const ZMIN = 0.62;
+function fit() {
+  const f = app.firstElementChild;
+  if (!f || !f.classList.contains('fit')) return;
+  const cs = getComputedStyle(app);
+  const H = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  if (H < 50 || W < 50) return;
+  const sheet = f.querySelector('#sheet'), cols = f.querySelector('.proof .cols'), dlg = f.querySelector('.proof .main .dialog');
+  let z = 1;
+  const lay = () => {
+    const w = W / z;
+    f.style.width = w + 'px';
+    f.style.minHeight = '0px';
+    f.style.marginBottom = '0px';
+    f.style.transform = z < 0.999 ? 'scale(' + z + ')' : '';
+    f.classList.toggle('narrow', w < 800);
+    f.classList.toggle('tiny', w < 600);
+    if (sheet) {
+      sheet.style.maxHeight = '';
+      const cap = f.classList.contains('narrow') ? Math.max(190, H / z * 0.42) : Math.max(190, H / z - cols.offsetTop - dlg.offsetHeight - 22);
+      sheet.style.maxHeight = cap + 'px';
+    }
+    return f.scrollHeight;
+  };
+  let need = lay();
+  for (let i = 0; i < 6 && need * z > H + 1 && z > ZMIN; i++) {
+    z = Math.max(ZMIN, Math.min(z - 0.01, H / need));
+    need = lay();
+  }
+  /* una vez decidido el tamaño, la pantalla ocupa todo el alto y se descuenta el hueco que deja la reducción */
+  f.style.minHeight = (H / z) + 'px';
+  const full = Math.max(need, H / z);
+  f.style.marginBottom = z < 0.999 ? (-full * (1 - z)) + 'px' : '0px';
+}
+let fitTimer = null;
+window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { fit(); padShow(); }, 80); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fit());
+const soundBtn = () => `<button class="btn sm snd${save.mv + save.sv === 0 ? ' off' : ''}" data-act="sound" aria-label="Volume: music ${save.mv} of 5, effects ${save.sv} of 5" title="Volume">${ico('spk')}<i class="vb">${meter(save.mv)}</i></button>`;
+/* el juego lleva los dos idiomas: el botón guarda la elección y recarga la página en el otro */
+const langBtn = () => `<button class="btn sm lng" data-act="lang" aria-label="Language: English. Switch to Spanish" title="Idioma / Language"><b class="${EN ? '' : 'on'}">ES</b><b class="${EN ? 'on' : ''}">EN</b></button>`;
+function hud(title, back, sub) {
+  return `<header class="hud">
+    <button class="btn sm" data-act="${back}">${ico('back')}<span>Back</span></button>
+    <div class="hud-t"><h1>${title}</h1>${sub ? `<span class="hud-s">${sub}</span>` : ''}</div>
+    <div class="hud-r"><span class="tot" title="Stars earned">${ico('star')} ${totalStars()}</span>${soundBtn()}</div>
+  </header>`;
+}
+const starsHTML = n => `<span class="stars" aria-label="${n} of 3 stars">${[1, 2, 3].map(i => `<i class="${i <= n ? 'on' : ''}">${ico('star')}</i>`).join('')}</span>`;
+
+/* ---------- portada ---------- */
+function scrTitle() {
+  const any = Object.keys(save.done).length > 0;
+  return `<section class="title">
+    <div class="tsnd">${langBtn()}${soundBtn()}</div>
+    <div class="logo"><span class="l1">LOGIC</span><span class="l2">ADVANCE</span></div>
+    <p class="tag">Fitch-style natural deduction in six logics</p>
+    <div class="hero">
+      <div class="hero-owl">${owl(6, 'happy')}</div>
+      <div class="hero-proof sheet static">
+        ${staticRow([1, 0, 'P→Q', 'Premise'])}${staticRow([2, 0, 'Q→R', 'Premise', 'p'])}
+        ${staticRow([3, 1, 'P', 'Assumption', 'h'])}${staticRow([4, 1, 'Q', '→E 1, 3'])}${staticRow([5, 1, 'R', '→E 2, 4'])}
+        ${staticRow([6, 0, 'P→R', '→I 3–5'])}
+      </div>
+    </div>
+    <button class="btn pri big" data-act="start"><span class="blink">${any ? 'CONTINUE' : 'PRESS START'}</span></button>
+    <div class="strip">${C.worlds.map((W, i) => `<span class="wbadge" style="--wc:var(--w${W.k})" title="${esc(W.logic)}">${raw(W.badge)}</span>`).join('')}</div>
+  </section>`;
+}
+
+/* ---------- mapa ---------- */
+function scrMap() {
+  const themeName = { '': 'Auto', light: 'Day', dark: 'Night' }[save.theme];
+  return hud('WORLD MAP', 'title') + `<div class="map">` + C.worlds.map((W, i) => {
+    const s = wstat(i), open = worldOpen(i);
+    return `<button class="wcard${open ? '' : ' locked'}" style="--wc:var(--w${W.k})" data-act="world" data-w="${i}">
+      <span class="wbadge">${raw(W.badge)}</span>
+      <span class="winfo"><span class="wnum">WORLD ${W.k}</span><b>${W.name}</b><span class="wlogic">${W.logic}</span></span>
+      <span class="wprog">${open
+        ? `<span class="pbar"><i style="width:${Math.round(100 * s.done / s.total)}%"></i></span><span class="cnt">${s.done}/${s.total} · ${ico('star')} ${s.stars}</span>`
+        : `<span class="cnt lockmsg">${ico('lock')} Complete 60% of the previous world</span>`}</span>
+    </button>`;
+  }).join('') + `</div>
+  <div class="opts panel">
+    <span class="mlabel">OPTIONS</span>
+    <button class="btn sm" data-act="free" aria-pressed="${save.free}">Free mode: ${save.free ? 'yes' : 'no'}</button>
+    <button class="btn sm" data-act="theme">Theme: ${themeName}</button>
+    <button class="btn sm" data-act="lang">Language: English</button>
+    <button class="btn sm" data-act="wipe">Erase progress</button>
+    <span class="optnote">Free mode unlocks every world and stage.</span>
+  </div>`;
+}
+
+/* ---------- mundo ---------- */
+const TYPE = { T: ['book', 'Theory'], P: ['⊢', 'Proof'], M: ['⊨', 'Model'], Q: ['quiz', 'Questions'], TT: ['grid', 'Table'] };
+function scrWorld() {
+  const W = C.worlds[V.w];
+  return hud(W.name, 'map', W.logic) + `
+  <div class="dialog small slim" data-act="twskip"><div class="who">${owl(2, 'neutral')}</div><div class="say" data-tw="W${V.w}">${tx(W.intro)}</div></div>
+  <ol class="stages">` + W.stages.map((s, i) => {
+    const d = save.done[sid(V.w, i)], open = stageOpen(V.w, i);
+    const res = !open ? ico('lock') : isEx(s) ? starsHTML(d || 0) : d ? `<span class="done">${ico('check')}</span>` : '';
+    return `<li><button class="srow t${s.t}${open ? '' : ' locked'}${d ? ' isdone' : ''}" data-act="stage" data-s="${i}">
+      <span class="snum">${i + 1}</span>
+      <span class="stype" title="${TYPE[s.t][1]}">${ico(TYPE[s.t][0])}</span>
+      <span class="stitle">${esc(s.title)}${s.boss ? ' <em class="boss">BOSS</em>' : ''}${s.sys ? '<small>' + s.sys + '</small>' : ''}</span>
+      <span class="sres">${res}</span></button></li>`;
+  }).join('') + `</ol>`;
+}
+
+/* ---------- etapas ---------- */
+function enterStage() {
+  const s = C.worlds[V.w].stages[V.s];
+  if (s.t === 'T') ST = { type: 'T', stage: s, page: 0 };
+  if (s.t === 'Q') ST = { type: 'Q', stage: s, i: 0, wrong: 0, picked: -1, bad: [] };
+  if (s.t === 'TT') {
+    const cols = s.cols.map(L.parse), atoms = L.atomsOf(cols), rows = ttRows(atoms);
+    ST = { type: 'TT', stage: s, cols, atoms, rows, cells: cols.map(() => rows.map(() => null)), mark: null, checks: 0, solved: false,
+      msg: { k: 'info', h: tx(s.intro) } };
+  }
+  if (s.t === 'M') {
+    const prem = s.prem.map(L.parse), goal = s.goal ? L.parse(s.goal) : null, atoms = L.atomsOf(goal ? [...prem, goal] : prem), val = {};
+    atoms.forEach(a => { val[a] = 1; });
+    ST = { type: 'M', stage: s, prem, goal, atoms, val, moves: 0, msg: { k: 'info', h: tx(s.intro) } };
+  }
+  if (s.t === 'P') {
+    const prem = s.prem.map(L.parse), goal = L.parse(s.goal);
+    ST = { type: 'P', stage: s, goal, init: L.newProof(prem), st: L.newProof(prem), hist: [], sel: [], hints: 0,
+      rules: L.ORDER.filter(r => C.RS[s.rules].includes(r)), flash: null, solved: false, usedSol: false, playing: false,
+      msg: { k: 'info', h: tx(s.intro || 'Tap the lines you want to use and press a rule.') } };
+  }
+}
+function scrStage() {
+  const s = ST.stage, W = C.worlds[V.w];
+  const head = hud(esc(s.title), 'toWorld', `World ${W.k} · stage ${V.s + 1} of ${W.stages.length}`);
+  return head + ({ T: scrTheory, P: scrProof, M: scrModel, Q: scrQuiz, TT: scrTable })[ST.type]();
+}
+const KMOOD = { err: 'sad', hint: 'think', ok: 'happy' };
+const sayBox = (m, small) => {
+  const mood = KMOOD[m.k] || (ST.stage.boss ? 'brave' : 'neutral');
+  return `<div class="dialog ${m.k}${small ? ' small' : ''}" data-act="twskip" aria-live="polite"><div class="who">${owl(3, mood)}</div><div class="say" data-tw="S${V.w}-${V.s}-${m.k}">${m.h}</div></div>`;
+};
+
+/* ----- teoría ----- */
+function staticRow(r) {
+  const flag = r[4] || '';
+  const sub = flag === 'h' || flag === 's';
+  return rowHTML({ n: r[0], depth: r[1], html: r[2] === '⋮' ? glyph('⋮') : fm(r[2]), just: raw(r[3]), top: sub, foot: sub || flag === 'p' });
+}
+function figHTML(f) {
+  if (Array.isArray(f)) return `<div class="figrow">${f.map(figHTML).join('')}</div>`;
+  if (f.k === 'fitch') return `<div class="sheet static">${f.rows.map(staticRow).join('')}</div>`;
+  if (f.k === 'table') return `<div class="tw"><table class="tbl"><thead><tr>${f.head.map(h => `<th>${tx(h)}</th>`).join('')}</tr></thead><tbody>${f.rows.map(r => `<tr>${r.map(c => `<td>${tx(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  if (f.k === 'kripke') {
+    const BW = 104, BH = 46, pos = {};
+    f.w.forEach(w => { pos[w.id] = w; });
+    const arrows = f.e.map(([a, b]) => {
+      const A = pos[a], B = pos[b];
+      const x1 = A.x + BW + 6, y1 = A.y + BH / 2, x2 = B.x - 12, y2 = B.y + BH / 2;
+      return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><path d="M${x2 + 8} ${y2} l-10 -6 v12 z"/>`;
+    }).join('');
+    return `<div class="kr-wrap"><div class="kripke" style="height:${f.h}px"><svg viewBox="0 0 310 ${f.h}" width="310" height="${f.h}" aria-hidden="true">${arrows}</svg>${
+      f.w.map(w => `<div class="world" style="left:${w.x}px;top:${w.y}px"><b>${w.id}</b><span>${tx('{' + (w.t || '–') + '}')}</span></div>`).join('')}</div>
+      <p class="cap">${tx(f.cap)}</p></div>`;
+  }
+  return '';
+}
+function scrTheory() {
+  const s = ST.stage, p = s.pages[ST.page], n = s.pages.length, last = ST.page === n - 1;
+  const mood = p.mood || moodOf(p.say);
+  return `<div class="theory">
+    <div class="scene panel${p.fig ? '' : ' empty'}">${p.fig ? figHTML(p.fig) : `<div class="scene-owl">${owl(7, mood)}</div>`}</div>
+    <div class="dialog big" data-act="twskip"><div class="who">${owl(4, mood)}<span>MINERVA</span></div><div class="say" data-tw="T${V.w}-${V.s}-${ST.page}">${tx(p.say)}</div></div>
+    <div class="tnav">
+      <button class="btn" data-act="tprev" ${ST.page ? '' : 'disabled'}>${ico('back')}<span>Back</span></button>
+      <span class="pg">${s.pages.map((x, i) => `<i class="${i === ST.page ? 'on' : ''}"></i>`).join('')}</span>
+      <button class="btn pri" data-act="tnext"><span>${last ? 'Finish' : 'Next'}</span>${ico('next')}</button>
+    </div>
+  </div>`;
+}
+/* Minerva escribe letra a letra, con su voz de pitidos, y mueve el pico mientras habla */
+function typewriter(el) {
+  const box = el.closest('.dialog');
+  const bird = box && box.querySelector('.owl');
+  if (bird) bird.classList.add('fresh');
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const units = [];
+  const walk = node => {
+    [...node.childNodes].forEach(ch => {
+      if (ch.nodeType === 3) {
+        const frag = document.createDocumentFragment();
+        ch.textContent.split(/(\s+)/).forEach(tok => {
+          if (!tok) return;
+          if (/^\s+$/.test(tok)) { frag.appendChild(document.createTextNode(tok)); return; }
+          const word = document.createElement('span');
+          word.className = 'tww';
+          for (const c of tok) { const sp = document.createElement('span'); sp.className = 'twh'; sp.textContent = c; word.appendChild(sp); units.push(sp); }
+          frag.appendChild(word);
+        });
+        ch.replaceWith(frag);
+      } else if (ch.nodeName.toLowerCase() === 'svg') { ch.classList.add('twh'); units.push(ch); }
+      else walk(ch);
+    });
+  };
+  walk(el);
+  if (bird) bird.classList.add('talk');
+  let i = 0, n = 0;
+  twTimer = setInterval(() => {
+    for (let k = 0; k < 2 && i < units.length; k++) units[i++].classList.remove('twh');
+    if (n++ % 2 === 0) AU.blip();
+    if (i >= units.length) { clearInterval(twTimer); if (bird) bird.classList.remove('talk'); }
+  }, 30);
+}
+function twDone() {
+  const hidden = app.querySelectorAll('.twh');
+  if (!hidden.length) return true;
+  clearInterval(twTimer);
+  hidden.forEach(e => e.classList.remove('twh'));
+  app.querySelectorAll('.owl.talk').forEach(o => o.classList.remove('talk'));
+  return false;
+}
+
+/* ----- prueba de Fitch ----- */
+function rowHTML(o) {
+  let bars = '';
+  for (let d = 0; d <= o.depth; d++) {
+    const last = d === o.depth;
+    bars += `<i class="bar${last && o.top ? ' top' : ''}${last && o.foot ? ' foot' : ''}"></i>`;
+  }
+  return `<div class="row ${o.cls || ''}" ${o.attr || ''}><span class="ln">${o.n}</span><span class="bars">${bars}</span><span class="fml${o.foot ? ' foot' : ''}">${o.html}</span><span class="just">${o.just || ''}</span></div>`;
+}
+function sheetHTML() {
+  const st = ST.st, S = st.open;
+  const selL = new Set(ST.sel.filter(x => x > 0));
+  const selS = ST.sel.filter(x => x < 0).map(x => L.subAt(st, -x));
+  let lastPrem = -1;
+  st.lines.forEach((l, i) => { if (l.kind === 'prem') lastPrem = i; });
+  let h = '';
+  st.lines.forEach((ln, i) => {
+    const k = L.lineK(st, i, S), cls = [];
+    const marker = ln.kind === 'strict';
+    const openMarker = marker && st.subs[ln.path[ln.path.length - 1]].end == null;
+    if (selL.has(i + 1) || selS.some(sp => i >= sp.start && i <= sp.end)) cls.push('sel');
+    if (k < 0 && !openMarker) cls.push(L.pickSub(st, i) ? 'insub' : 'dim');
+    else if (k === 1) cls.push('ext');
+    else if (k > 1) cls.push('dim');
+    if (openMarker) cls.push('mark');
+    if (i === ST.flash) cls.push('new');
+    const sub = ln.kind === 'hyp' || marker;
+    h += rowHTML({
+      n: i + 1, depth: ln.path.length, html: marker ? fm('□') : fh(ln.f),
+      just: raw(ln.rule) + (ln.cites ? ' ' + ln.cites : ''), top: sub, foot: sub || i === lastPrem,
+      cls: cls.join(' '), attr: `data-act="line" data-i="${i}" role="button" tabindex="0"`
+    });
+  });
+  if (!ST.solved) h += rowHTML({ n: '', depth: S.length, html: '<span class="caret"></span>', cls: 'cursor' });
+  return h;
+}
+function paletteHTML() {
+  const st = ST.st, off = ST.solved || ST.playing ? 'disabled' : '';
+  const lit = rid => { const r = L.apply(st, rid, ST.sel, {}, ST.goal); return !r.error; };
+  const hasHyp = ST.rules.some(r => ['→I', '¬I', '∨E', '∃E', '↔I'].includes(r));
+  const hasStrict = ST.rules.includes('□I');
+  return `<div class="panel pal">
+    <div class="mlabel">RULES</div>
+    <div class="rules">${ST.rules.map(r => `<button class="rbtn${!off && lit(r) ? ' lit' : ''}" data-act="rule" data-r="${r}" title="${esc(L.RULES[r].desc)}" ${off}>${raw(r)}</button>`).join('')}</div>
+    <div class="mlabel">SUBPROOFS</div>
+    <div class="acts">
+      ${hasHyp ? `<button class="btn sm" data-act="hyp" ${off}>Assume</button>` : ''}
+      ${hasStrict ? `<button class="btn sm" data-act="strict" ${off}>${glyph('□')} Strict</button>` : ''}
+      <button class="btn sm" data-act="close" ${off || (st.open.length ? '' : 'disabled')}>Close sub.</button>
+    </div>
+    <div class="acts tools">
+      <button class="btn sm" data-act="undo" ${off || (ST.hist.length ? '' : 'disabled')}>${ico('undo')}<span>Undo</span></button>
+      <button class="btn sm" data-act="reset" ${off || (ST.hist.length ? '' : 'disabled')}>Restart</button>
+      <button class="btn sm" data-act="hint" ${off}>Hint</button>
+      <button class="btn sm" data-act="book">Rules</button>
+    </div>
+  </div>`;
+}
+function goalHTML(tag, prem, goal, sym, sys) {
+  return `<div class="goal panel"><span class="gtag">${tag}</span><span class="seq">${prem.map(fh).join('<span class="comma">,</span> ')} ${glyph(sym)} ${fh(goal)}</span>${sys ? `<span class="sys">${sys}</span>` : ''}</div>`;
+}
+const SYSNAME = { K: 'System K', T: 'System T', S4: 'System S4', S5: 'System S5', LP: 'LP logic' };
+function scrProof() {
+  const s = ST.stage;
+  return `<div class="proof">
+    ${goalHTML('PROVE', ST.init.lines.map(l => l.f), ST.goal, '⊢', s.sys ? SYSNAME[s.sys] : '')}
+    <div class="cols">
+      <div class="main"><div class="sheet panel" id="sheet">${sheetHTML()}</div>${sayBox(ST.msg, true)}</div>
+      <div class="side">${paletteHTML()}</div>
+    </div>
+  </div>`;
+}
+const IDLE = 'Tap the lines you want to use and press a rule.';
+function say(k, h) { ST.msg = { k, h }; }
+function commit(st) {
+  ST.hist.push(ST.st);
+  ST.st = st; ST.sel = []; ST.flash = st.lines.length - 1;
+  if (ST.msg.k === 'err') say('info', IDLE);
+  sfx.ok();
+  checkWin();
+  render();
+}
+function checkWin() {
+  const last = ST.st.lines[ST.st.lines.length - 1];
+  if (!last || last.kind !== 'step' || last.path.length || !L.eq(last.f, ST.goal)) return;
+  ST.solved = true;
+  const stars = ST.usedSol ? 1 : ST.hints ? 2 : 3;
+  finish(stars);
+  say('ok', 'Proved! The conclusion is in the main column.');
+  const mine = ST;
+  setTimeout(() => { if (ST === mine && V.scr === 'stage') winModal(stars, `${ST.st.lines.length} lines` + (ST.usedSol ? ' · with the solution' : ST.hints ? ` · ${ST.hints} ${ST.hints === 1 ? 'hint' : 'hints'}` : ' · no hints')); }, 650);
+}
+function finish(stars) {
+  const id = sid(V.w, V.s);
+  save.done[id] = Math.max(save.done[id] || 0, stars);
+  persist();
+  sfx.win();
+}
+function doRule(rid, extra) {
+  const r = L.apply(ST.st, rid, ST.sel, extra, ST.goal);
+  if (r.error) { sfx.err(); say('err', raw(r.error)); closeModal(); render(); return; }
+  if (r.need === 'formula') {
+    openFormula(r.prompt, L.suggest(r.kind, ST.st, ST.goal, r.A), f => doRule(rid, Object.assign({}, extra, { f })));
+    return;
+  }
+  if (r.need === 'choice') {
+    openChoice(`${raw(rid)}: choose the result`, r.options, f => doRule(rid, Object.assign({}, extra, { out: L.str(f) })));
+    return;
+  }
+  closeModal();
+  commit(r.st);
+}
+function playSolution() {
+  const mine = ST, sol = ST.stage.sol;
+  ST.usedSol = true; ST.playing = true; ST.st = ST.init; ST.hist = []; ST.sel = []; ST.flash = null;
+  say('hint', 'Watch how it is built, step by step.');
+  render();
+  let i = 0;
+  const tick = () => {
+    if (ST !== mine || V.scr !== 'stage') return;
+    ST.st = L.step(ST.st, sol[i++], ST.goal);
+    ST.flash = ST.st.lines.length - 1;
+    sfx.sel();
+    if (i >= sol.length) { ST.playing = false; checkWin(); render(); return; }
+    render();
+    setTimeout(tick, 800);
+  };
+  setTimeout(tick, 600);
+}
+
+/* ----- modelos ----- */
+const VNAME = EN ? { 1: 'T', 0.5: 'B', 0: 'F' } : { 1: 'V', 0.5: 'A', 0: 'F' };   // en inglés: true, both, false
+function scrModel() {
+  const s = ST.stage, lp = s.logic === 'LP';
+  const des = v => (lp ? v >= 0.5 : v === 1);
+  const vals = lp ? [1, 0.5, 0] : [1, 0];
+  const sat = s.mode === 'sat';   // consistencia: hay que hacerlas todas verdaderas
+  const rowsF = sat ? ST.prem.map(f => ['Proposition', f, true]) : [...ST.prem.map(f => ['Premise', f, true]), ['Conclusion', ST.goal, false]];
+  let all = true;
+  const rows = rowsF.map(([lab, f, want]) => {
+    const v = L.evalF(f, ST.val), good = des(v) === want;
+    if (!good) all = false;
+    return `<tr><td class="lab">${lab}</td><td>${fh(f)}</td><td><span class="vchip v${v * 2}">${VNAME[v]}</span></td>
+      <td class="want ${good ? 'good' : 'no'}">${ico(good ? 'check' : 'cross')}<span>${want ? (lp ? 'must be T or B' : 'must be T') : (lp ? 'must be F' : 'must be F')}</span></td></tr>`;
+  }).join('');
+  ST.all = all;
+  return `<div class="proof">
+    ${sat ? `<div class="goal panel"><span class="gtag">CONSISTENCY</span><span class="seq">${ST.prem.map(fh).join('<span class="comma">,</span> ')}</span><span class="sys">Classical logic</span></div>` : goalHTML('COUNTEREXAMPLE', ST.prem, ST.goal, '⊬', lp ? 'LP logic' : 'Classical logic')}
+    <div class="cols">
+      <div class="panel model">
+        <div class="mlabel">VALUES</div>
+        <div class="vals">${ST.atoms.map(a => `<div class="vrow"><span class="fm">${esc(a)}</span><span class="seg">${vals.map(v => `<button class="vbtn v${v * 2}${ST.val[a] === v ? ' on' : ''}" data-act="val" data-a="${a}" data-v="${v}" aria-pressed="${ST.val[a] === v}">${VNAME[v]}</button>`).join('')}</span></div>`).join('')}</div>
+        <div class="mlabel">RESULT</div>
+        <div class="tw"><table class="tbl vt"><tbody>${rows}</tbody></table></div>
+        ${lp ? '<p class="cap">T: true · B: both (true and false) · F: false. T and B are designated.</p>' : ''}
+      </div>
+      <div class="side">${sayBox(ST.msg, true)}</div>
+    </div>
+  </div>`;
+}
+
+/* ----- tablas de verdad ----- */
+function ttRows(atoms) {
+  const n = atoms.length, rows = [];
+  for (let i = 0; i < (1 << n); i++) {
+    const v = {};
+    atoms.forEach((a, j) => { v[a] = (i >> (n - 1 - j)) & 1 ? 0 : 1; });
+    rows.push(v);
+  }
+  return rows;
+}
+function scrTable() {
+  const head = ST.atoms.map(a => `<th>${fm(a)}</th>`).join('') + ST.cols.map(f => `<th class="fc">${fh(f)}</th>`).join('');
+  const body = ST.rows.map((v, r) => `<tr>${ST.atoms.map(a => `<td><span class="tv v${v[a] * 2}">${VNAME[v[a]]}</span></td>`).join('')}${ST.cols.map((f, c) => {
+    const x = ST.cells[c][r], mk = ST.mark ? ST.mark[c][r] : '';
+    return `<td class="fc"><button class="tcell${x == null ? ' empty' : ''}${mk ? ' ' + mk : ''}" data-act="tcell" data-c="${c}" data-r="${r}" aria-label="${esc(L.str(f))}, row ${r + 1}: ${x == null ? 'empty' : VNAME[x]}" ${ST.solved || mk === 'good' ? 'disabled' : ''}>${x == null ? '?' : VNAME[x]}</button></td>`;
+  }).join('')}</tr>`).join('');
+  const filled = ST.cells.every(col => col.every(x => x != null));
+  return `<div class="proof">
+    <div class="goal panel"><span class="gtag">TRUTH TABLE</span><span class="seq">${ST.cols.map(fh).join('<span class="comma">,</span> ')}</span><span class="sys">${ST.rows.length} rows</span></div>
+    <div class="cols">
+      <div class="panel model"><div class="tw"><table class="tbl tt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></div>
+      <div class="side">${sayBox(ST.msg, true)}
+        <div class="panel pal"><div class="acts">
+          <button class="btn pri" data-act="tcheck" ${filled && !ST.solved ? '' : 'disabled'}>Check</button>
+          <button class="btn sm" data-act="tclear" ${ST.solved ? 'disabled' : ''}>Clear all</button></div>
+          <p class="cap">Tap a cell to set T. Tap it again to switch it to F.</p></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ----- preguntas ----- */
+function scrQuiz() {
+  const s = ST.stage, q = s.qs[ST.i], solved = ST.picked === q.ok;
+  return `<div class="quiz">
+    <div class="pg">${s.qs.map((x, i) => `<i class="${i === ST.i ? 'on' : i < ST.i ? 'past' : ''}"></i>`).join('')}</div>
+    <div class="dialog big" data-act="twskip"><div class="who">${owl(4, solved ? 'happy' : ST.bad.length ? 'sad' : 'think')}<span>MINERVA</span></div><div class="say" data-tw="Q${V.w}-${V.s}-${ST.i}">${tx(q.q)}</div></div>
+    <div class="qopts">${q.opts.map((o, i) => `<button class="btn qopt${solved && i === q.ok ? ' right' : ''}${ST.bad.includes(i) ? ' wrong' : ''}" data-act="qpick" data-i="${i}" ${solved || ST.bad.includes(i) ? 'disabled' : ''}>${tx(o)}</button>`).join('')}</div>
+    ${solved ? `<div class="panel why"><b>${ico('check')} Correct.</b> ${tx(q.why)}</div>
+      <div class="tnav"><span></span><span></span><button class="btn pri" data-act="qnext"><span>${ST.i === s.qs.length - 1 ? 'Finish' : 'Next'}</span>${ico('next')}</button></div>`
+      : ST.bad.length ? `<div class="panel why bad"><b>${ico('cross')} Not that one.</b> Think it over.</div>` : ''}
+  </div>`;
+}
+
+/* ---------- ventanas ---------- */
+function closeModal() {
+  if (!modal.hidden) padKey = padKeyApp;
+  modal.hidden = true; modal.innerHTML = ''; FD = null;
+  padShow(); legend();
+}
+function showModal(html, cls) { modal.innerHTML = `<div class="mbox panel ${cls || ''}" role="dialog" aria-modal="true">${html}</div>`; if (modal.hidden) padKeyApp = padKey; modal.hidden = false; if (padOn) padSet(padDefault()); legend(); }
+
+function alphabet() {
+  const fs = [ST.goal, ...ST.st.lines.filter(l => l.f).map(l => l.f)];
+  const preds = new Set(), sy = new Set();
+  let fo = false;
+  fs.forEach(f => L.subformulas(f).forEach(g => { if (g.t === 'atom') { preds.add(g.p); if (g.args.length) fo = true; } }));
+  const txt = ST.rules.join('') + fs.map(L.str).join('');
+  for (const c of '¬∧∨→↔⊥∀∃□◇') if (txt.includes(c)) sy.add(c);
+  if (ST.rules.some(r => ['DN', 'DeM', 'LEM'].includes(r))) ['¬', '∧', '∨'].forEach(c => sy.add(c));
+  if (ST.rules.some(r => ['RT', 'R4', 'R5', 'MC'].includes(r))) ['¬', '□', '◇'].forEach(c => sy.add(c));
+  let terms = [];
+  if (fo) {
+    terms = L.namesInPlay(ST.st, ST.goal);
+    const fr = L.freshName(ST.st, ST.goal);
+    if (!terms.includes(fr)) terms.push(fr);
+    if (sy.has('∀') || sy.has('∃')) terms.push('x', 'y');
+  }
+  return { preds: [...preds].sort(), terms, syms: [...'¬∧∨→↔⊥∀∃□◇'].filter(c => sy.has(c)), fo };
+}
+function openFormula(title, sug, onOK) {
+  const al = alphabet();
+  FD = { buf: '', onOK, sug, al };
+  const key = (k, lab, cls) => `<button class="key ${cls || ''}" data-act="fkey" data-k="${esc(k)}">${lab || raw(k)}</button>`;
+  showModal(`<h3>${tx(title)}</h3>
+    ${sug.length ? `<div class="mlabel">SUGGESTIONS</div><div class="chips">${sug.map((f, i) => `<button class="chip" data-act="fsug" data-i="${i}">${fh(f)}</button>`).join('')}</div>` : ''}
+    <div class="mlabel">OR WRITE ANOTHER</div>
+    <div class="fdisp" id="fdisp"></div>
+    <div class="fstat" id="fstat"></div>
+    <div class="keys">
+      <div class="krow">${al.preds.map(p => key(p)).join('')}${al.terms.map(t => key(t, null, 'term')).join('')}</div>
+      <div class="krow">${al.syms.map(c => key(c)).join('')}${key('(')}${key(')')}${key('bs', ico('back') + ' Delete', 'wide')}</div>
+    </div>
+    <div class="mrow"><button class="btn" data-act="mcancel">Cancel</button><button class="btn pri" data-act="fok">OK</button></div>
+    <p class="cap kbd">Keyboard: ${al.syms.map(c => `<span><kbd>${esc(KEYOF[c])}</kbd>${glyph(c)}</span>`).join("")}<span><kbd>Enter</kbd>accept</span></p>`, 'fdlg');
+  fdRefresh();
+}
+function fdCheck() {
+  try {
+    const f = L.parse(FD.buf);
+    if (!L.closed(f)) throw new L.LErr('There is a free variable. Use a name (a, b, c) or a quantifier.');
+    return { f };
+  } catch (e) { if (e instanceof L.LErr) return { err: e.message }; throw e; }
+}
+function fdRefresh() {
+  const d = document.getElementById('fdisp'), s = document.getElementById('fstat');
+  if (!d) return;
+  d.innerHTML = `<span class="fm">${raw(FD.buf)}</span><span class="caret"></span>`;
+  if (!FD.buf) { s.className = 'fstat'; s.textContent = ''; return; }
+  const r = fdCheck();
+  s.className = 'fstat ' + (r.f ? 'good' : 'no');
+  s.innerHTML = r.f ? ico('check') + ' Well-formed formula' : esc(r.err);
+}
+function fdKey(k) {
+  if (k === 'bs') FD.buf = [...FD.buf].slice(0, -1).join('');
+  else if ([...FD.buf].length < 40) FD.buf += k;
+  sfx.sel();
+  fdRefresh();
+}
+function fdOK() {
+  const r = fdCheck();
+  if (r.err) { sfx.err(); fdRefresh(); return; }
+  const cb = FD.onOK;
+  cb(r.f);
+}
+function openChoice(title, opts, onPick) {
+  FD = { opts, onPick, choice: true };
+  showModal(`<h3>${title}</h3><div class="choices">${opts.map((f, i) => `<button class="btn chopt" data-act="cpick" data-i="${i}">${fh(f)}</button>`).join('')}</div>
+    <div class="mrow"><button class="btn" data-act="mcancel">Cancel</button></div>`);
+}
+const meter = v => [1, 2, 3, 4, 5].map(i => `<i class="${i <= v ? 'on' : ''}"></i>`).join('');
+function openSound() {
+  const row = (lab, k) => `<div class="vol"><b>${lab}</b>
+    <button class="btn sm" data-act="vol" data-k="${k}" data-d="-1" aria-label="Lower ${lab.toLowerCase()}" ${save[k] <= 0 ? 'disabled' : ''}>-</button>
+    <span class="vmeter" role="img" aria-label="${lab}: ${save[k]} of 5">${meter(save[k])}</span>
+    <button class="btn sm" data-act="vol" data-k="${k}" data-d="1" aria-label="Raise ${lab.toLowerCase()}" ${save[k] >= 5 ? 'disabled' : ''}>+</button></div>`;
+  showModal(`<h3>Volume</h3>${row('Music', 'mv')}${row('Effects', 'sv')}
+    <div class="mrow"><button class="btn pri" data-act="mcancel">Done</button></div>`, 'snddlg');
+}
+function openBook() {
+  showModal(`<h3>Rule book</h3><div class="book">${ST.rules.map(r => { const R = L.RULES[r]; return `<div class="brow"><span class="rbtn static">${raw(r)}</span><div><b>${R.name}</b><p>${raw(R.desc)}</p><small>${R.use}</small></div></div>`; }).join('')}</div>
+    <div class="mrow"><button class="btn pri" data-act="mcancel">Close</button></div>`, 'bookdlg');
+}
+function winModal(stars, detail) {
+  const W = C.worlds[V.w], last = V.s === W.stages.length - 1;
+  const outro = ST.stage.outro ? `<p class="outro">${tx(ST.stage.outro)}</p>` : '';
+  showModal(`<div class="winowl">${owl(4, 'happy')}</div><div class="qed">${ST.type === 'P' ? 'Q.E.D.' : 'NICE!'}</div>
+    <div class="bigstars">${starsHTML(stars)}</div>
+    <p class="detail">${detail}</p>${outro}
+    <div class="mrow"><button class="btn" data-act="again">Retry</button><button class="btn" data-act="toWorld">Stages</button>
+    <button class="btn pri" data-act="next"><span>${last ? 'To the map' : 'Next'}</span>${ico('next')}</button></div>`, 'win');
+}
+function nextStage() {
+  const W = C.worlds[V.w];
+  if (V.s < W.stages.length - 1) go('stage', V.w, V.s + 1); else go('map');
+}
+
+/* ---------- acciones ---------- */
+const ACT = {
+  start() { sfx.ok(); go('map'); },
+  title() { go('title'); },
+  map() { go('map'); },
+  toWorld() { go('world'); },
+  sound() { openSound(); },
+  vol(d) {
+    save[d.k] = Math.max(0, Math.min(5, save[d.k] + (+d.d)));
+    persist(); applySound(); sfx.sel();
+    render(); openSound();
+  },
+  free() { save.free = !save.free; persist(); sfx.sel(); render(); },
+  theme() { save.theme = { '': 'light', light: 'dark', dark: '' }[save.theme]; persist(); applyTheme(); sfx.sel(); render(); },
+  lang() { save.lang = EN ? 'es' : 'en'; persist(); location.reload(); },
+  wipe() {
+    showModal(`<h3>Erase all progress?</h3><p>Completed stages and stars will be lost.</p>
+      <div class="mrow"><button class="btn pri" data-act="mcancel">No, go back</button><button class="btn" data-act="wipeYes">Yes, erase</button></div>`);
+  },
+  wipeYes() { save.done = {}; persist(); closeModal(); render(); },
+  world(d) {
+    if (!worldOpen(+d.w)) { sfx.err(); return; }
+    sfx.sel(); go('world', +d.w);
+  },
+  stage(d) {
+    if (!stageOpen(V.w, +d.s)) { sfx.err(); return; }
+    sfx.sel(); go('stage', V.w, +d.s);
+  },
+  again() { go('stage'); },
+  next() { nextStage(); },
+
+  twskip() { twDone(); },
+  tprev() { if (ST.page) { ST.page--; sfx.page(); render(); } },
+  tnext() {
+    if (!twDone()) return;
+    if (ST.page < ST.stage.pages.length - 1) { ST.page++; sfx.page(); render(); return; }
+    save.done[sid(V.w, V.s)] = 1; persist(); sfx.ok();
+    nextStage();
+  },
+
+  line(d) {
+    if (ST.type !== 'P' || ST.solved || ST.playing) return;
+    const i = +d.i, st = ST.st, ln = st.lines[i], k = L.lineK(st, i, st.open);
+    let ref = null;
+    if (k >= 0) ref = i + 1;
+    else { const sp = L.pickSub(st, i); if (sp) ref = -(sp.start + 1); }
+    if (ref == null) {
+      if (ln.kind === 'strict') return;
+      sfx.err(); say('err', 'That line is inside a closed subproof that can no longer be cited from here.'); render(); return;
+    }
+    const at = ST.sel.indexOf(ref);
+    if (at >= 0) ST.sel.splice(at, 1); else ST.sel.push(ref);
+    ST.flash = null;
+    sfx.sel(); render();
+  },
+  rule(d) { ST.flash = null; doRule(d.r, {}); },
+  hyp() { openFormula('What do you want to assume?', L.suggest('hyp', ST.st, ST.goal), f => { closeModal(); commit(L.addHyp(ST.st, f)); }); },
+  strict() { commit(L.addStrict(ST.st)); },
+  close() { commit(L.closeSub(ST.st)); },
+  undo() { if (!ST.hist.length) return; ST.st = ST.hist.pop(); ST.sel = []; ST.flash = null; say('info', IDLE); sfx.page(); render(); },
+  reset() { ST.st = ST.init; ST.hist = []; ST.sel = []; ST.flash = null; say('info', tx(ST.stage.intro || IDLE)); sfx.page(); render(); },
+  hint() {
+    const hs = ST.stage.hints;
+    if (ST.hints < hs.length) { ST.hints++; say('hint', `<b>Hint ${ST.hints} of ${hs.length}.</b> ` + tx(hs[ST.hints - 1])); }
+    else say('hint', 'I have given you all the hints. If you like, I can show you the whole proof. <button class="btn sm" data-act="solve">Show solution</button>');
+    sfx.page(); render();
+  },
+  solve() { playSolution(); },
+  book() { openBook(); },
+
+  fkey(d) { fdKey(d.k); },
+  fsug(d) { const cb = FD.onOK; cb(FD.sug[+d.i]); },
+  fok() { fdOK(); },
+  cpick(d) { const cb = FD.onPick; cb(FD.opts[+d.i]); },
+  mcancel() { closeModal(); },
+
+  tcell(d) {
+    const c = +d.c, r = +d.r;
+    ST.cells[c][r] = ST.cells[c][r] === 1 ? 0 : 1;
+    if (ST.mark) ST.mark[c][r] = '';
+    sfx.sel(); render();
+  },
+  tclear() { ST.cells = ST.cols.map(() => ST.rows.map(() => null)); ST.mark = null; say('info', tx(ST.stage.intro)); sfx.page(); render(); },
+  tcheck() {
+    ST.checks++;
+    let bad = 0;
+    ST.mark = ST.cols.map((f, c) => ST.rows.map((v, r) => { const ok = L.evalF(f, v) === ST.cells[c][r]; if (!ok) bad++; return ok ? 'good' : 'bad'; }));
+    if (bad) {
+      sfx.err();
+      say('err', ` ${bad} ${bad === 1 ? 'cell is wrong' : 'cells are wrong'}, marked in red. Check the main connective of that column.`);
+      render(); return;
+    }
+    ST.solved = true;
+    const stars = ST.checks === 1 ? 3 : ST.checks === 2 ? 2 : 1;
+    finish(stars);
+    say('ok', 'Table correct!');
+    render();
+    const mine = ST;
+    setTimeout(() => { if (ST === mine && V.scr === 'stage') winModal(stars, mine.checks === 1 ? 'Right first time' : mine.checks + ' checks'); }, 600);
+  },
+  val(d) {
+    ST.val[d.a] = +d.v; ST.moves++;
+    sfx.sel(); render();
+    if (ST.all && !ST.solved) {
+      ST.solved = true;
+      const stars = ST.moves <= ST.atoms.length + 1 ? 3 : 2;
+      finish(stars);
+      const mine = ST;
+      setTimeout(() => { if (ST === mine) winModal(stars, mine.stage.mode === 'sat' ? 'All true at once: the set is consistent.' : 'Premises designated, conclusion not: the argument is not valid.'); }, 500);
+    }
+  },
+  qpick(d) {
+    const q = ST.stage.qs[ST.i], i = +d.i;
+    if (i === q.ok) { ST.picked = i; sfx.ok(); } else { ST.bad.push(i); ST.wrong++; sfx.err(); }
+    render();
+  },
+  qnext() {
+    if (ST.i < ST.stage.qs.length - 1) { ST.i++; ST.picked = -1; ST.bad = []; sfx.page(); render(); return; }
+    const stars = ST.wrong === 0 ? 3 : ST.wrong <= 2 ? 2 : 1;
+    finish(stars);
+    winModal(stars, ST.wrong ? `${ST.wrong} ${ST.wrong === 1 ? 'mistake' : 'mistakes'}` : 'No mistakes');
+  }
+};
+/* ---------- mando: cruceta, A, B, L, R, START y SELECT ---------- */
+let padOn = false;      // el cursor del mando solo se muestra cuando se está usando
+let padKey = null, padKeyApp = null, padClick = false;
+const keyOf = e => Object.keys(e.dataset).sort().map(k => k + '=' + e.dataset[k]).join('&');
+function padCands() {
+  const rootEl = modal.hidden ? app : modal;
+  return [...rootEl.querySelectorAll('button:not(:disabled), .row[data-act]')].filter(e => e.offsetParent !== null && !e.classList.contains('locked') && !e.classList.contains('cursor'));
+}
+function padCur() { return padOn && padKey ? padCands().find(e => keyOf(e) === padKey) || null : null; }
+function padShow() {
+  document.querySelectorAll('.padf').forEach(e => e.classList.remove('padf'));
+  const e = padCur();
+  if (e) { e.classList.add('padf'); e.scrollIntoView({ block: 'nearest' }); }
+  return e;
+}
+function padDefault() {
+  const c = padCands();
+  return c.find(e => e.classList.contains('pri')) || c.find(e => !e.closest('.hud') && !e.closest('.tsnd')) || c[0] || null;
+}
+function padSet(e) { padOn = true; padKey = e ? keyOf(e) : null; padShow(); }
+function padMove(dir) {
+  const cur = padCur();
+  if (!cur) { padSet(padDefault()); return; }
+  const r0 = cur.getBoundingClientRect(), x0 = r0.left + r0.width / 2, y0 = r0.top + r0.height / 2;
+  let best = null, bs = Infinity;
+  padCands().forEach(e => {
+    if (e === cur) return;
+    const r = e.getBoundingClientRect(), dx = r.left + r.width / 2 - x0, dy = r.top + r.height / 2 - y0;
+    const horiz = dir === 'left' || dir === 'right';
+    const along = dir === 'left' ? -dx : dir === 'right' ? dx : dir === 'up' ? -dy : dy;
+    if (along < 6) return;
+    /* si los dos elementos se solapan en el eje perpendicular, casi no se penaliza el desvío */
+    const overlap = horiz ? Math.min(r0.bottom, r.bottom) - Math.max(r0.top, r.top) : Math.min(r0.right, r.right) - Math.max(r0.left, r.left);
+    const across = Math.abs(horiz ? dy : dx);
+    const score = along + across * (overlap > 4 ? 0.4 : 2.6);
+    if (score < bs) { bs = score; best = e; }
+  });
+  if (best) { padSet(best); sfx.sel(); }
+}
+function padPress(k) {
+  AU.unlock();
+  const inModal = !modal.hidden, T = V.scr === 'stage' && ST ? ST.type : '';
+  if (k === 'up' || k === 'down' || k === 'left' || k === 'right') {
+    if (!inModal && T === 'T' && (k === 'left' || k === 'right')) { ACT[k === 'left' ? 'tprev' : 'tnext'](); return; }
+    padMove(k); return;
+  }
+  if (k === 'A') {
+    if (!inModal && app.querySelector('.twh')) { twDone(); return; }
+    const cur = padCur();
+    if (cur) { padClick = true; try { cur.click(); } finally { padClick = false; } return; }
+    if (!inModal && V.scr === 'title') { ACT.start(); return; }
+    if (!inModal && T === 'T') { ACT.tnext(); return; }
+    padSet(padDefault()); return;
+  }
+  if (k === 'B') {
+    if (inModal) { if (modal.querySelector('.win')) ACT.toWorld(); else closeModal(); sfx.page(); return; }
+    const back = app.querySelector('.hud [data-act]');
+    if (back) { sfx.page(); back.click(); }
+    return;
+  }
+  if (k === 'start') {
+    if (inModal) { if (modal.querySelector('.snddlg')) closeModal(); return; }
+    if (V.scr === 'title') ACT.start(); else openSound();
+    return;
+  }
+  if (inModal) return;
+  if (V.scr === 'map' || V.scr === 'world') {
+    if (k === 'L' || k === 'R') {
+      const w = V.w + (k === 'L' ? -1 : 1);
+      if (V.scr === 'world' && w >= 0 && w < C.worlds.length && worldOpen(w)) { sfx.sel(); go('world', w); }
+    }
+    return;
+  }
+  if (T === 'T') { if (k === 'L') ACT.tprev(); if (k === 'R') ACT.tnext(); return; }
+  if (T === 'P' && !ST.solved && !ST.playing) {
+    if (k === 'L') ACT.undo();
+    if (k === 'R') ACT.hint();
+    if (k === 'select') openBook();
+    return;
+  }
+  if (T === 'TT' && !ST.solved) {
+    if (k === 'R' && ST.cells.every(col => col.every(x => x != null))) ACT.tcheck();
+    if (k === 'select') ACT.tclear();
+    return;
+  }
+  if (T === 'Q' && k === 'R') { const n = app.querySelector('[data-act=qnext]'); if (n) n.click(); }
+}
+/* qué hace cada botón en la pantalla actual */
+function legend() {
+  const el = document.getElementById('legend');
+  if (!el) return;
+  const T = V.scr === 'stage' && ST ? ST.type : '';
+  let items;
+  if (!modal.hidden) items = [['A', 'select'], ['B', modal.querySelector('.win') ? 'stages' : 'close']];
+  else if (V.scr === 'title') items = [['A', 'play'], ['START', 'play']];
+  else if (V.scr === 'map') items = [['A', 'enter'], ['B', 'title'], ['START', 'volume']];
+  else if (V.scr === 'world') items = [['A', 'enter'], ['B', 'map'], ['L R', 'other world']];
+  else if (T === 'T') items = [['A', 'continue'], ['B', 'exit'], ['L R', 'page']];
+  else if (T === 'P') items = [['A', 'select'], ['B', 'exit'], ['L', 'undo'], ['R', 'hint'], ['SELECT', 'rules']];
+  else if (T === 'TT') items = [['A', 'T / F'], ['B', 'exit'], ['R', 'check'], ['SELECT', 'clear']];
+  else if (T === 'Q') items = [['A', 'select'], ['B', 'exit'], ['R', 'next']];
+  else items = [['A', 'select'], ['B', 'exit'], ['START', 'volume']];
+  el.innerHTML = items.map(([k, t]) => `<b>${k}</b> ${t}`).join(' · ');
+}
+document.querySelector('.pad').addEventListener('click', e => {
+  const b = e.target.closest('[data-pad]');
+  if (b) { padPress(b.dataset.pad); b.blur(); }
+});
+
+['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, () => AU.unlock(), true));
+document.addEventListener('click', e => {
+  if (e.target.closest('.pad')) return;
+  if (!padClick && e.isTrusted && padOn) { padOn = false; padShow(); }
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) { if (e.target === modal && !modal.querySelector('.win')) closeModal(); return; }
+  const fn = ACT[b.dataset.act];
+  if (fn) fn(b.dataset, b);
+});
+const KEYOF = { '¬': '~', '∧': '&', '∨': '|', '→': '>', '↔': '=', '⊥': '#', '∀': '@', '∃': '?', '□': '[', '◇': '<' };
+const KEYMAP = { '~': '¬', '!': '¬', '&': '∧', '^': '∧', '|': '∨', '>': '→', '=': '↔', '#': '⊥', '@': '∀', '?': '∃', '[': '□', '<': '◇', '(': '(', ')': ')' };
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key.toLowerCase() === 'z' && V.scr === 'stage' && ST.type === 'P' && modal.hidden) { e.preventDefault(); ACT.undo(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const DIR = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' }[e.key];
+  if (DIR) { e.preventDefault(); padPress(DIR); return; }
+  if (!modal.hidden && FD && !FD.choice) {   // se está escribiendo una fórmula: las letras van a la fórmula
+    if (e.key === 'Escape') { closeModal(); return; }
+    const al = FD.al;
+    if (e.key === 'Enter') { e.preventDefault(); const cur = padCur(); if (cur) padPress('A'); else fdOK(); return; }
+    if (e.key === 'Backspace') { e.preventDefault(); fdKey('bs'); return; }
+    let k = KEYMAP[e.key];
+    if (k && k !== '(' && k !== ')' && !al.syms.includes(k)) k = null;
+    if (!k && /^[a-zA-Z]$/.test(e.key)) {
+      if (al.preds.includes(e.key)) k = e.key;
+      else if (al.terms.includes(e.key)) k = e.key;
+      else if (al.preds.includes(e.key.toUpperCase()) && !al.fo) k = e.key.toUpperCase();
+    }
+    if (k) { e.preventDefault(); fdKey(k); }
+    return;
+  }
+  /* un botón enfocado con el tabulador se activa de la forma habitual */
+  const onCtl = e.target.matches && e.target.matches('button, .row[data-act]');
+  if ((e.key === 'Enter' || e.key === ' ') && onCtl) {
+    if (e.target.matches('.row[data-act]')) { e.preventDefault(); e.target.click(); }
+    return;
+  }
+  const PADKEY = { z: 'A', x: 'B', a: 'L', s: 'R', enter: 'start', backspace: 'select', escape: 'B' }[e.key.toLowerCase()];
+  if (PADKEY) { e.preventDefault(); padPress(PADKEY); }
+});
+
+/* icono de pestaña */
+try {
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" shape-rendering="crispEdges">${owlBody('neutral')}</svg>`);
+  document.head.appendChild(link);
+} catch (e) { /* sin icono */ }
+
+/* textos fijos de la carcasa, en el idioma elegido */
+document.documentElement.lang = EN ? 'en' : 'es';
+document.title = 'Logic Advance';
+document.querySelector('.brand').innerHTML = 'LOGIC <b>ADVANCE</b>';
+document.querySelector('.pad').setAttribute('aria-label', 'Console controls');
+const PADTXT = { up: 'Up', down: 'Down', left: 'Left', right: 'Right', L: 'L (A key)', R: 'R (S key)', A: 'A (Z key)', B: 'B (X key)', select: 'Select (Backspace)', start: 'Start (Enter)' };
+document.querySelectorAll('.pad [data-pad]').forEach(b => { b.title = PADTXT[b.dataset.pad]; b.setAttribute('aria-label', PADTXT[b.dataset.pad]); });
+
+window.LogicaAdvance = { go, render, state: () => ST, owl };
+render();
+})();
+
+</script>
+<script>
+(function () {
+  var lang = 'es';
+  try {
+    var s = JSON.parse(localStorage.getItem('logica-advance-v1') || '{}');
+    if (s.lang === 'es' || s.lang === 'en') lang = s.lang;
+  } catch (e) { /* sin almacenamiento */ }
+  if (window.LA_SAVE && window.LA_SAVE.lang) lang = window.LA_SAVE.lang;
+  var el = document.createElement('script');
+  el.textContent = document.getElementById('la-' + lang).textContent;
+  document.body.appendChild(el);
+})();
 </script>
 <script>
 if ('serviceWorker' in navigator) window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
