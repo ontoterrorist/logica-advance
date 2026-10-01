@@ -259,13 +259,13 @@ b, strong { word-spacing: .14em; }
 }
 
 /* ---------- mapa ---------- */
-.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); gap: 4px; }
+.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(244px, 1fr)); gap: 4px; }
 .wcard {
   display: grid; grid-template-columns: auto 1fr; grid-template-areas: "b i" "p p"; gap: 10px 12px; align-items: center;
   text-align: left; border: 0; margin: 4px; padding: 12px 12px 14px; background: var(--panel); cursor: pointer;
   box-shadow: var(--ol), inset 0 -4px 0 0 var(--panel-lo);
 }
-.wcard .wbadge { grid-area: b; font-size: 1.35em; }
+.wcard .wbadge { grid-area: b; font-size: 1.2em; }
 .winfo { grid-area: i; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wnum { font-family: var(--fd); font-size: 8px; letter-spacing: .1em; color: var(--ink2); }
 .winfo b { font-size: 1.12em; line-height: 1.15; }
@@ -561,6 +561,11 @@ b, strong { word-spacing: .14em; }
 kbd { font-family: var(--fb); font-size: 1em; padding: 0 6px; background: var(--panel-lo); color: var(--ink); }
 .rn .g.op { margin: 0 .06em; }
 .dialog.slim { min-height: 0; padding: 6px 12px; align-items: center; }
+.lockmsg { white-space: normal; line-height: 1.1; }
+/* ningún texto se sale de su caja: las palabras largas se parten con guion */
+.winfo, .stitle, .say, .cap, .why, .outro, .detail, .optnote, .tbl td, .qopt { overflow-wrap: break-word; hyphens: auto; }
+.winfo b { font-size: 1.06em; overflow-wrap: anywhere; }
+.btn, .chip { max-width: 100%; }
 
 </style>
 </head>
@@ -2538,7 +2543,7 @@ function scrMap() {
       <span class="winfo"><span class="wnum">MUNDO ${W.k}</span><b>${W.name}</b><span class="wlogic">${W.logic}</span></span>
       <span class="wprog">${open
         ? `<span class="pbar"><i style="width:${Math.round(100 * s.done / s.total)}%"></i></span><span class="cnt">${s.done}/${s.total} · ${ico('star')} ${s.stars}</span>`
-        : `<span class="cnt">${ico('lock')} Completa el 60 % del mundo anterior</span>`}</span>
+        : `<span class="cnt lockmsg">${ico('lock')} Completa el 60 % del mundo anterior</span>`}</span>
     </button>`;
   }).join('') + `</div>
   <div class="opts panel">

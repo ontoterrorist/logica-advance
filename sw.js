@@ -1,6 +1,6 @@
 /* Lógica Advance — service worker: deja la app guardada en el teléfono para jugar sin conexión.
    Responde desde la copia guardada y, si hay red, la renueva por detrás para la próxima vez. */
-const CACHE = 'logica-advance-281c466ea6';
+const CACHE = 'logica-advance-011a4a1c23';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
