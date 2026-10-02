@@ -269,7 +269,7 @@ b, strong { word-spacing: .14em; }
 }
 
 /* ---------- mapa ---------- */
-.map { display: grid; grid-template-columns: repeat(auto-fit, minmax(244px, 1fr)); gap: 4px; }
+.map { flex: 1 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(244px, 1fr)); gap: 4px; }   /* llena el alto libre */
 .wcard {
   display: grid; grid-template-columns: auto 1fr; grid-template-areas: "b i" "p p"; gap: 10px 12px; align-items: center;
   text-align: left; border: 0; margin: 4px; padding: 12px 12px 14px; background: var(--panel); cursor: pointer;
@@ -288,7 +288,7 @@ b, strong { word-spacing: .14em; }
 .wcard.locked .wbadge { background: var(--panel-lo); color: var(--ink2); }
 .wcard.locked .winfo { opacity: .55; }
 .wcard:active:not(.locked) { transform: translateY(2px); }
-.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.opts { display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 2px 6px; margin: 4px; }
 .optnote { font-size: .82em; color: var(--ink2); margin-left: 6px; }
 
 /* ---------- lista de etapas ---------- */
@@ -2845,6 +2845,7 @@ function fit() {
   const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   if (H < 50 || W < 50) return;
   const sheet = f.querySelector('#sheet'), cols = f.querySelector('.proof .cols'), dlg = f.querySelector('.proof .main .dialog');
+  const map = f.querySelector('.map'), opts = map && map.querySelector('.opts');
   let z = 1;
   const lay = () => {
     const w = W / z;
@@ -2854,6 +2855,11 @@ function fit() {
     f.style.transform = z < 0.999 ? 'scale(' + z + ')' : '';
     f.classList.toggle('narrow', w < 800);
     f.classList.toggle('tiny', w < 600);
+    if (opts) {   // las opciones ocupan el hueco que dejan las tarjetas en la última fila
+      opts.style.gridColumn = '';
+      const n = getComputedStyle(map).gridTemplateColumns.split(' ').filter(t => parseFloat(t) > 0).length || 1, r = (map.children.length - 1) % n;
+      opts.style.gridColumn = 'span ' + (r ? n - r : n);
+    }
     if (sheet) {
       sheet.style.maxHeight = '';
       const cap = f.classList.contains('narrow') ? Math.max(190, H / z * 0.42) : Math.max(190, H / z - cols.offsetTop - dlg.offsetHeight - 22);
@@ -2862,9 +2868,14 @@ function fit() {
     return f.scrollHeight;
   };
   let need = lay();
-  for (let i = 0; i < 6 && need * z > H + 1 && z > ZMIN; i++) {
-    z = Math.max(ZMIN, Math.min(z - 0.01, H / need));
-    need = lay();
+  if (map) {
+    /* en el mapa el número de columnas cambia con el tamaño: se prueba de mayor a menor y gana el primero que cabe */
+    for (z = 1; need * z > H + 1 && z > ZMIN; ) { z = Math.max(ZMIN, z - 0.02); need = lay(); }
+  } else {
+    for (let i = 0; i < 6 && need * z > H + 1 && z > ZMIN; i++) {
+      z = Math.max(ZMIN, Math.min(z - 0.01, H / need));
+      need = lay();
+    }
   }
   /* una vez decidido el tamaño, la pantalla ocupa todo el alto y se descuenta el hueco que deja la reducción */
   f.style.minHeight = (H / z) + 'px';
@@ -2918,7 +2929,7 @@ function scrMap() {
         ? `<span class="pbar"><i style="width:${Math.round(100 * s.done / s.total)}%"></i></span><span class="cnt">${s.done}/${s.total} · ${ico('star')} ${s.stars}</span>`
         : `<span class="cnt lockmsg">${ico('lock')} Completa el 60 % del mundo anterior</span>`}</span>
     </button>`;
-  }).join('') + `</div>
+  }).join('') + `
   <div class="opts panel">
     <span class="mlabel">OPCIONES</span>
     <button class="btn sm" data-act="free" aria-pressed="${save.free}">Modo libre: ${save.free ? 'sí' : 'no'}</button>
@@ -2926,7 +2937,7 @@ function scrMap() {
     <button class="btn sm" data-act="lang">Idioma: español</button>
     <button class="btn sm" data-act="wipe">Borrar progreso</button>
     <span class="optnote">El modo libre abre todos los mundos y etapas.</span>
-  </div>`;
+  </div></div>`;
 }
 
 /* ---------- mundo ---------- */
@@ -4664,6 +4675,7 @@ function fit() {
   const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   if (H < 50 || W < 50) return;
   const sheet = f.querySelector('#sheet'), cols = f.querySelector('.proof .cols'), dlg = f.querySelector('.proof .main .dialog');
+  const map = f.querySelector('.map'), opts = map && map.querySelector('.opts');
   let z = 1;
   const lay = () => {
     const w = W / z;
@@ -4673,6 +4685,11 @@ function fit() {
     f.style.transform = z < 0.999 ? 'scale(' + z + ')' : '';
     f.classList.toggle('narrow', w < 800);
     f.classList.toggle('tiny', w < 600);
+    if (opts) {   // las opciones ocupan el hueco que dejan las tarjetas en la última fila
+      opts.style.gridColumn = '';
+      const n = getComputedStyle(map).gridTemplateColumns.split(' ').filter(t => parseFloat(t) > 0).length || 1, r = (map.children.length - 1) % n;
+      opts.style.gridColumn = 'span ' + (r ? n - r : n);
+    }
     if (sheet) {
       sheet.style.maxHeight = '';
       const cap = f.classList.contains('narrow') ? Math.max(190, H / z * 0.42) : Math.max(190, H / z - cols.offsetTop - dlg.offsetHeight - 22);
@@ -4681,9 +4698,14 @@ function fit() {
     return f.scrollHeight;
   };
   let need = lay();
-  for (let i = 0; i < 6 && need * z > H + 1 && z > ZMIN; i++) {
-    z = Math.max(ZMIN, Math.min(z - 0.01, H / need));
-    need = lay();
+  if (map) {
+    /* en el mapa el número de columnas cambia con el tamaño: se prueba de mayor a menor y gana el primero que cabe */
+    for (z = 1; need * z > H + 1 && z > ZMIN; ) { z = Math.max(ZMIN, z - 0.02); need = lay(); }
+  } else {
+    for (let i = 0; i < 6 && need * z > H + 1 && z > ZMIN; i++) {
+      z = Math.max(ZMIN, Math.min(z - 0.01, H / need));
+      need = lay();
+    }
   }
   /* una vez decidido el tamaño, la pantalla ocupa todo el alto y se descuenta el hueco que deja la reducción */
   f.style.minHeight = (H / z) + 'px';
@@ -4737,7 +4759,7 @@ function scrMap() {
         ? `<span class="pbar"><i style="width:${Math.round(100 * s.done / s.total)}%"></i></span><span class="cnt">${s.done}/${s.total} · ${ico('star')} ${s.stars}</span>`
         : `<span class="cnt lockmsg">${ico('lock')} Complete 60% of the previous world</span>`}</span>
     </button>`;
-  }).join('') + `</div>
+  }).join('') + `
   <div class="opts panel">
     <span class="mlabel">OPTIONS</span>
     <button class="btn sm" data-act="free" aria-pressed="${save.free}">Free mode: ${save.free ? 'yes' : 'no'}</button>
@@ -4745,7 +4767,7 @@ function scrMap() {
     <button class="btn sm" data-act="lang">Language: English</button>
     <button class="btn sm" data-act="wipe">Erase progress</button>
     <span class="optnote">Free mode unlocks every world and stage.</span>
-  </div>`;
+  </div></div>`;
 }
 
 /* ---------- mundo ---------- */
