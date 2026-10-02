@@ -4,7 +4,7 @@ Juego para aprender lógica formal con deducción natural al estilo Fitch, con a
 
 **Jugar:** https://ontoterrorist.github.io/logica-advance/ · English version: https://ontoterrorist.github.io/logic-advance/
 
-Siete mundos, cada uno con teoría y retos:
+Diez mundos, cada uno con teoría y retos:
 
 | Mundo | Tema |
 |---|---|
@@ -15,6 +15,9 @@ Siete mundos, cada uno con teoría y retos:
 | 4 · Ciudadela De Re | Lógica modal de primer orden |
 | 5 · Taller del Constructor | Lógica intuicionista |
 | 6 · Caverna de las Contradicciones | Lógica paraconsistente (LP) |
+| 7 · Jardín de los Testigos | Lógica intuicionista de primer orden |
+| 8 · Abismo de las Paradojas | Lógica paraconsistente de primer orden (LP) |
+| 9 · Torre de Gödel | Aritmética formal, numeración de Gödel y teoremas de incompletud |
 
 ## Instalarla en el celular
 
