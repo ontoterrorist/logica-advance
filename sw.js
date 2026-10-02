@@ -1,6 +1,6 @@
 /* Lógica Advance — service worker: deja la app guardada en el teléfono para jugar sin conexión. */
 const PREFIX = 'logica-advance-';
-const CACHE = PREFIX + 'v2-129744fae7';
+const CACHE = PREFIX + 'v2-89cbe2acde';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png'];
 /* al instalar se baja todo de la red, sin pasar por la copia HTTP del navegador */
 self.addEventListener('install', e => {

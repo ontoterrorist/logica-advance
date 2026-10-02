@@ -288,8 +288,12 @@ b, strong { word-spacing: .14em; }
 .wcard.locked .wbadge { background: var(--panel-lo); color: var(--ink2); }
 .wcard.locked .winfo { opacity: .55; }
 .wcard:active:not(.locked) { transform: translateY(2px); }
-.opts { display: flex; flex-wrap: wrap; align-items: center; align-content: center; gap: 2px 6px; margin: 4px; }
-.optnote { font-size: .82em; color: var(--ink2); margin-left: 6px; }
+/* opciones: rótulo arriba, botones iguales en cuadrícula y la nota debajo */
+.opts { display: flex; flex-direction: column; justify-content: center; gap: 4px; margin: 4px; }
+.opts .mlabel { margin: 0 4px; }
+.optgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.optgrid .btn { justify-content: center; text-align: center; }
+.optnote { font-size: .82em; color: var(--ink2); margin: 0 4px; }
 
 /* ---------- lista de etapas ---------- */
 .stages { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 0 6px; }
@@ -488,6 +492,7 @@ b, strong { word-spacing: .14em; }
 
 /* la disposición depende del ancho útil de la pantalla (lo calcula fit() en ui.js) */
 .fit.narrow .cols { grid-template-columns: minmax(0, 1fr); }
+.fit.narrow .opts { padding-block: 6px 8px; gap: 1px; }
 .fit.tiny .hud .btn span { display: none; }
 .fit.tiny .hero-owl .owl { width: 96px; height: 96px; }
 .fit.tiny .dialog.big .who span { display: none; }
@@ -2932,10 +2937,12 @@ function scrMap() {
   }).join('') + `
   <div class="opts panel">
     <span class="mlabel">OPCIONES</span>
+    <div class="optgrid">
     <button class="btn sm" data-act="free" aria-pressed="${save.free}">Modo libre: ${save.free ? 'sí' : 'no'}</button>
     <button class="btn sm" data-act="theme">Tema: ${themeName}</button>
     <button class="btn sm" data-act="lang">Idioma: español</button>
     <button class="btn sm" data-act="wipe">Borrar progreso</button>
+    </div>
     <span class="optnote">El modo libre abre todos los mundos y etapas.</span>
   </div></div>`;
 }
@@ -4762,10 +4769,12 @@ function scrMap() {
   }).join('') + `
   <div class="opts panel">
     <span class="mlabel">OPTIONS</span>
+    <div class="optgrid">
     <button class="btn sm" data-act="free" aria-pressed="${save.free}">Free mode: ${save.free ? 'yes' : 'no'}</button>
     <button class="btn sm" data-act="theme">Theme: ${themeName}</button>
     <button class="btn sm" data-act="lang">Language: English</button>
     <button class="btn sm" data-act="wipe">Erase progress</button>
+    </div>
     <span class="optnote">Free mode unlocks every world and stage.</span>
   </div></div>`;
 }
