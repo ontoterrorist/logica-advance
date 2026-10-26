@@ -4471,7 +4471,7 @@ const ACT = {
   },
   free() { save.free = !save.free; persist(); sfx.sel(); render(); },
   theme() { save.theme = { '': 'light', light: 'dark', dark: '' }[save.theme]; persist(); applyTheme(); sfx.sel(); render(); },
-  lang() { save.lang = EN ? 'es' : 'en'; persist(); location.reload(); },
+  lang() { save['lang_' + (window.LA_ED || 'es')] = EN ? 'es' : 'en'; delete save.lang; persist(); location.reload(); },
   wipe() {
     showModal(`<h3>¿Borrar todo el progreso?</h3><p>Se perderán las etapas completadas y las estrellas.</p>
       <div class="mrow"><button class="btn pri" data-act="mcancel">No, volver</button><button class="btn" data-act="wipeYes">Sí, borrar</button></div>`);
@@ -7250,7 +7250,7 @@ const ACT = {
   },
   free() { save.free = !save.free; persist(); sfx.sel(); render(); },
   theme() { save.theme = { '': 'light', light: 'dark', dark: '' }[save.theme]; persist(); applyTheme(); sfx.sel(); render(); },
-  lang() { save.lang = EN ? 'es' : 'en'; persist(); location.reload(); },
+  lang() { save['lang_' + (window.LA_ED || 'es')] = EN ? 'es' : 'en'; delete save.lang; persist(); location.reload(); },
   wipe() {
     showModal(`<h3>Erase all progress?</h3><p>Completed stages and stars will be lost.</p>
       <div class="mrow"><button class="btn pri" data-act="mcancel">No, go back</button><button class="btn" data-act="wipeYes">Yes, erase</button></div>`);
@@ -7587,9 +7587,10 @@ render();
 <script>
 (function () {
   var lang = 'es';
+  window.LA_ED = 'es';
   try {
     var s = JSON.parse(localStorage.getItem('logica-advance-v1') || '{}');
-    if (s.lang === 'es' || s.lang === 'en') lang = s.lang;
+    if (s.lang_es === 'es' || s.lang_es === 'en') lang = s.lang_es;
   } catch (e) { /* sin almacenamiento */ }
   if (window.LA_SAVE && window.LA_SAVE.lang) lang = window.LA_SAVE.lang;
   var el = document.createElement('script');
